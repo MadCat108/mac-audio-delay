@@ -233,6 +233,8 @@ private final class UpdaterWindowController: NSWindowController {
       updateStage(progress: 7, status: "Preparing update…", detail: "Connecting securely to GitHub")
     case lower.contains("downloading audio delay source"):
       updateStage(progress: 14, status: "Downloading latest source…", detail: line)
+    case lower.contains("downloaded audio delay version"):
+      updateStage(progress: 20, status: line, detail: "Verifying the downloaded source")
     case lower.contains("command line tools"):
       updateStage(progress: 22, status: "Checking Apple build tools…", detail: line)
     case lower.contains("vb-cable"):

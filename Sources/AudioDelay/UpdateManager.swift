@@ -72,9 +72,9 @@ final class UpdateManager: ObservableObject {
 
   private func presentAvailableUpdate(_ version: String) {
     let alert = NSAlert()
-    alert.messageText = "Audio Delay \(version) is available"
+    alert.messageText = "Audio Delay update available"
     alert.informativeText =
-      "Install the update now? Audio Delay will close, rebuild locally, and reopen automatically."
+      "You have version \(currentVersionText). Version \(version) is available.\n\nInstall it now? Audio Delay will close, rebuild locally, and reopen automatically."
     alert.alertStyle = .informational
     alert.addButton(withTitle: "Install Update")
     alert.addButton(withTitle: "Later")

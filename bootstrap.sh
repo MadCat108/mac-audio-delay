@@ -29,5 +29,16 @@ if [[ ! -x "$SOURCE_DIR/install.sh" ]]; then
   echo "The downloaded repository does not contain its installer." >&2
   exit 1
 fi
+if [[ ! -f "$SOURCE_DIR/VERSION" ]]; then
+  echo "The downloaded repository does not contain a version number." >&2
+  exit 1
+fi
+
+SOURCE_VERSION="$(tr -d '[:space:]' < "$SOURCE_DIR/VERSION")"
+if [[ ! "$SOURCE_VERSION" =~ '^[0-9]+(\.[0-9]+)+$' ]]; then
+  echo "The downloaded repository contains an invalid version number." >&2
+  exit 1
+fi
+echo "Downloaded Audio Delay version $SOURCE_VERSION."
 
 "$SOURCE_DIR/install.sh"
