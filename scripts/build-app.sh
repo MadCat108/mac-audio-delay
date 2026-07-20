@@ -10,6 +10,8 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 ICON_SOURCE="$PROJECT_DIR/Resources/AppIcon.icns"
+UPDATE_SCRIPT_SOURCE="$PROJECT_DIR/scripts/update.sh"
+VERSION_FILE="$PROJECT_DIR/VERSION"
 SOX_PATH="${SOX_PATH:-}"
 LOCAL_SOX=false
 
@@ -20,6 +22,16 @@ fi
 
 if [[ ! -x "$SOX_PATH" ]]; then
   echo "SoX is not executable: $SOX_PATH" >&2
+  exit 1
+fi
+
+if [[ ! -f "$VERSION_FILE" ]]; then
+  echo "Version file is missing: $VERSION_FILE" >&2
+  exit 1
+fi
+APP_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+if [[ ! "$APP_VERSION" =~ '^[0-9]+(\.[0-9]+)+$' ]]; then
+  echo "Invalid application version: $APP_VERSION" >&2
   exit 1
 fi
 
@@ -54,6 +66,9 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/AudioDelay" "$MACOS_DIR/AudioDelay"
 cp "$PROJECT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
+/usr/libexec/PlistBuddy \
+  -c "Set :CFBundleShortVersionString $APP_VERSION" \
+  "$CONTENTS_DIR/Info.plist"
 chmod 755 "$MACOS_DIR/AudioDelay"
 
 if [[ ! -f "$ICON_SOURCE" ]]; then
@@ -62,6 +77,12 @@ if [[ ! -f "$ICON_SOURCE" ]]; then
 fi
 
 cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.icns"
+if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
+  echo "Update helper is missing: $UPDATE_SCRIPT_SOURCE" >&2
+  exit 1
+fi
+cp "$UPDATE_SCRIPT_SOURCE" "$RESOURCES_DIR/update.sh"
+chmod 755 "$RESOURCES_DIR/update.sh"
 
 if $LOCAL_SOX; then
   cp "$SOX_PATH" "$RESOURCES_DIR/sox"

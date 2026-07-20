@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
   @ObservedObject var model: AudioDelayModel
-  private let delayPresets = [30, 60, 90, 120]
+  private let delayPresets = [30, 60, 90, 120, 180]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
@@ -22,13 +22,6 @@ struct ContentView: View {
         }
 
         Spacer()
-
-        Label(statusTitle, systemImage: statusSymbol)
-          .font(.callout.weight(.medium))
-          .foregroundStyle(statusColor)
-          .padding(.horizontal, 11)
-          .padding(.vertical, 7)
-          .background(statusColor.opacity(0.12), in: Capsule())
       }
 
       if !model.isVBCableInstalled {
@@ -186,14 +179,6 @@ struct ContentView: View {
   private var isBuffering: Bool {
     if case .waiting = model.runState { return true }
     return false
-  }
-
-  private var statusTitle: String {
-    switch model.runState {
-    case .stopped: return "Ready"
-    case .waiting: return "Buffering"
-    case .running: return "Playing"
-    }
   }
 
   private var statusSymbol: String {

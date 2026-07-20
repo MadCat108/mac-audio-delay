@@ -13,6 +13,26 @@ has_vb_cable() {
     system_profiler SPAudioDataType 2>/dev/null | grep -qi 'VB-Cable'
 }
 
+stop_running_app() {
+  if ! /usr/bin/pgrep -x AudioDelay >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "Closing the running Audio Delay app..."
+  /usr/bin/osascript \
+    -e 'tell application id "org.audiodelay.utility" to quit' \
+    >/dev/null 2>&1 || true
+
+  for _ in {1..50}; do
+    if ! /usr/bin/pgrep -x AudioDelay >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.1
+  done
+
+  /usr/bin/pkill -TERM -x AudioDelay >/dev/null 2>&1 || true
+}
+
 if [[ "$(uname -m)" != "arm64" ]]; then
   echo "Audio Delay currently supports Apple Silicon Macs only." >&2
   exit 1
@@ -23,6 +43,8 @@ if (( macos_major < MINIMUM_MACOS_MAJOR )); then
   echo "Audio Delay requires macOS 14 or newer." >&2
   exit 1
 fi
+
+stop_running_app
 
 if ! xcrun --find swift >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1; then
   echo "Apple Command Line Tools are required to build Audio Delay."

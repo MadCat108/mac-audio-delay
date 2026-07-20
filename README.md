@@ -43,6 +43,14 @@ The recipient does not need Xcode, Homebrew, or an Apple Developer account. Appl
 
 The app temporarily chooses VB-CABLE as the system output and restores the original output when stopped or closed. All system audio is routed through the delay while it is running.
 
+## Updating
+
+Choose **Audio Delay → Check for Updates…** for an immediate manual check. When an update is available, the app starts a separate local helper and closes. The helper downloads the latest public source, rebuilds the app locally, replaces the previous copy, and reopens it automatically.
+
+Audio Delay also performs a quiet update check on startup when it has not checked successfully within the previous 24 hours. It prompts only when a newer version is available; up-to-date results and temporary network failures remain silent.
+
+The current release version is stored in `VERSION`. Existing installations from before the in-app updater was added can upgrade by running the original installation command again.
+
 ## Local or maintainer build
 
 The local build requires Xcode or matching Apple Command Line Tools. SoX is downloaded from its official SourceForge release, verified, and compiled locally without Homebrew.
@@ -89,6 +97,7 @@ The paid VB-CABLE A+B and C+D packages are not used or distributed.
 - The SoX and VB-CABLE downloads use HTTPS and pinned SHA-256 checksums.
 - The VB-CABLE package must be notarized by Apple and signed by `Developer ID Installer: Vincent Burel (6K8JQXLBSY)`.
 - No terminal `sudo` password prompt is used. VB-CABLE's required system installation uses the standard macOS administrator-approval dialog.
+- In-app updates use the same public source bootstrap as the original installation and keep a diagnostic log at `~/Library/Logs/Audio Delay Update.log`.
 - VB-CABLE is installed only after the user sees its origin, donationware status, and licensing links and explicitly agrees.
 - The locally built app is ad-hoc signed. Organization-managed Macs may still impose additional application-control policies.
 
