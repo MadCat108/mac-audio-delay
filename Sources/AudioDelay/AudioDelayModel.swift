@@ -26,12 +26,14 @@ final class AudioDelayModel: ObservableObject {
   @Published var selectedOutputID: AudioDeviceID?
   @Published var runState: RunState = .stopped
   @Published private(set) var bufferProgress = 0.0
+  @Published private(set) var peakLevels = StereoPeak.zero
   @Published var errorMessage: String?
   @Published var isVBCableInstalled = false
 
   private var process: Process?
   private var errorPipe: Pipe?
   private var recentError = Data()
+  private var meterTextBuffer = ""
   private var originalOutputID: AudioDeviceID?
   private var countdownTimer: Timer?
   private var countdownDeadline: Date?
@@ -96,6 +98,7 @@ final class AudioDelayModel: ObservableObject {
     countdownDeadline = nil
     countdownDuration = 0
     bufferProgress = 0
+    peakLevels = .zero
 
     if let process, process.isRunning {
       process.terminationHandler = nil
@@ -144,7 +147,7 @@ final class AudioDelayModel: ObservableObject {
       let pipe = Pipe()
       process.executableURL = soxURL
       process.arguments = [
-        "-q",
+        "-S",
         "-t", "coreaudio", cable.name,
         "-r", "48000", "-c", "2",
         "-t", "coreaudio", output.name,
@@ -153,10 +156,12 @@ final class AudioDelayModel: ObservableObject {
       process.standardOutput = FileHandle.nullDevice
       process.standardError = pipe
       recentError.removeAll(keepingCapacity: true)
+      meterTextBuffer.removeAll(keepingCapacity: true)
+      peakLevels = .zero
       pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
         let data = handle.availableData
         guard !data.isEmpty else { return }
-        Task { @MainActor in self?.appendError(data) }
+        Task { @MainActor in self?.handleEngineOutput(data) }
       }
       process.terminationHandler = { [weak self] process in
         let status = process.terminationStatus
@@ -204,10 +209,18 @@ final class AudioDelayModel: ObservableObject {
     }
   }
 
-  private func appendError(_ data: Data) {
+  private func handleEngineOutput(_ data: Data) {
     recentError.append(data)
     if recentError.count > 32_768 {
       recentError.removeFirst(recentError.count - 32_768)
+    }
+
+    meterTextBuffer += String(decoding: data, as: UTF8.self)
+    if meterTextBuffer.count > 1_024 {
+      meterTextBuffer = String(meterTextBuffer.suffix(1_024))
+    }
+    if let peak = PeakMeterParser.parseLast(in: meterTextBuffer) {
+      peakLevels = peak
     }
   }
 
@@ -218,6 +231,7 @@ final class AudioDelayModel: ObservableObject {
     countdownDeadline = nil
     countdownDuration = 0
     bufferProgress = 0
+    peakLevels = .zero
     cleanupProcess()
     restoreOriginalOutput()
     runState = .stopped
@@ -233,6 +247,7 @@ final class AudioDelayModel: ObservableObject {
     errorPipe?.fileHandleForReading.readabilityHandler = nil
     errorPipe = nil
     process = nil
+    meterTextBuffer.removeAll(keepingCapacity: true)
   }
 
   private func restoreOriginalOutput() {

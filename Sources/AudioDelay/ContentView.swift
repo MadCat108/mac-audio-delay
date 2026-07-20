@@ -149,7 +149,12 @@ struct ContentView: View {
             .fontWeight(.medium)
             .contentTransition(.numericText())
           Spacer()
+          if case .running = model.runState {
+            StereoPeakMeter(peak: model.peakLevels)
+              .transition(.opacity.combined(with: .move(edge: .trailing)))
+          }
         }
+        .animation(.easeOut(duration: 0.2), value: model.runState)
       }
       .padding(12)
       .background(.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
