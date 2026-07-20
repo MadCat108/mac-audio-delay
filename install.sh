@@ -29,8 +29,6 @@ if ! xcrun --find swift >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1;
   echo "macOS will now open Apple's installer."
   xcode-select --install >/dev/null 2>&1 || true
 
-  /usr/bin/osascript -e 'display dialog "Install Apple’s Command Line Tools in the system window, then return here. Setup will continue automatically when installation finishes." with title "Audio Delay Setup" buttons {"OK"} default button "OK" with icon note' >/dev/null
-
   echo "Waiting for Apple Command Line Tools to finish installing..."
   for _ in {1..360}; do
     if xcrun --find swift >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1; then
