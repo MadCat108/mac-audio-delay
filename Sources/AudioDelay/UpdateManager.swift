@@ -107,23 +107,48 @@ final class UpdateManager: ObservableObject {
       guard let bundledScript = Bundle.main.url(forResource: "update", withExtension: "sh") else {
         throw UpdateError.missingUpdater
       }
+      guard let bundledUpdater = Bundle.main.url(
+        forResource: "Audio Delay Updater",
+        withExtension: "app"
+      ) else {
+        throw UpdateError.missingUpdater
+      }
 
-      let temporaryScript = FileManager.default.temporaryDirectory
-        .appendingPathComponent("audio-delay-update-\(UUID().uuidString).sh")
+      let updateDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("audio-delay-update-\(UUID().uuidString)", isDirectory: true)
+      try FileManager.default.createDirectory(
+        at: updateDirectory,
+        withIntermediateDirectories: true
+      )
+      let temporaryScript = updateDirectory.appendingPathComponent("update.sh")
+      let temporaryUpdater = updateDirectory.appendingPathComponent("Audio Delay Updater.app")
       try FileManager.default.copyItem(at: bundledScript, to: temporaryScript)
+      try FileManager.default.copyItem(at: bundledUpdater, to: temporaryUpdater)
       try FileManager.default.setAttributes(
         [.posixPermissions: 0o700],
         ofItemAtPath: temporaryScript.path
       )
 
-      let process = Process()
-      process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-      process.arguments = [temporaryScript.path]
-      process.standardOutput = FileHandle.nullDevice
-      process.standardError = FileHandle.nullDevice
-      try process.run()
-
-      NSApp.terminate(nil)
+      let configuration = NSWorkspace.OpenConfiguration()
+      configuration.activates = true
+      configuration.addsToRecentItems = false
+      configuration.arguments = [
+        temporaryScript.path,
+        temporaryUpdater.appendingPathComponent("Contents/Resources/AppIcon.icns").path,
+      ]
+      NSWorkspace.shared.openApplication(
+        at: temporaryUpdater,
+        configuration: configuration
+      ) { [weak self] _, error in
+        DispatchQueue.main.async {
+          if let error {
+            try? FileManager.default.removeItem(at: updateDirectory)
+            self?.presentFailure(error.localizedDescription)
+          } else {
+            NSApp.terminate(nil)
+          }
+        }
+      }
     } catch {
       presentFailure(error.localizedDescription)
     }

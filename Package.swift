@@ -8,12 +8,17 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "AudioDelay", targets: ["AudioDelay"])
+        .executable(name: "AudioDelay", targets: ["AudioDelay"]),
+        .executable(name: "AudioDelayUpdater", targets: ["AudioDelayUpdater"])
     ],
     targets: [
         .executableTarget(
             name: "AudioDelay",
             path: "Sources/AudioDelay"
+        ),
+        .executableTarget(
+            name: "AudioDelayUpdater",
+            path: "Sources/AudioDelayUpdater"
         ),
         .testTarget(
             name: "AudioDelayTests",

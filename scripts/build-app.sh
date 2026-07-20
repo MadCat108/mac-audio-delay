@@ -10,6 +10,7 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 ICON_SOURCE="$PROJECT_DIR/Resources/AppIcon.icns"
+UPDATER_INFO_SOURCE="$PROJECT_DIR/Resources/UpdaterInfo.plist"
 UPDATE_SCRIPT_SOURCE="$PROJECT_DIR/scripts/update.sh"
 VERSION_FILE="$PROJECT_DIR/VERSION"
 SOX_PATH="${SOX_PATH:-}"
@@ -59,6 +60,8 @@ fi
 SCRATCH_PATH="$PROJECT_DIR/.build-app"
 env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
   --scratch-path "$SCRATCH_PATH" --product AudioDelay
+env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
+  --scratch-path "$SCRATCH_PATH" --product AudioDelayUpdater
 BIN_DIR="$(env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
   --scratch-path "$SCRATCH_PATH" --show-bin-path)"
 
@@ -77,6 +80,23 @@ if [[ ! -f "$ICON_SOURCE" ]]; then
 fi
 
 cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.icns"
+if [[ ! -f "$UPDATER_INFO_SOURCE" ]]; then
+  echo "Updater Info.plist is missing: $UPDATER_INFO_SOURCE" >&2
+  exit 1
+fi
+UPDATER_APP_DIR="$RESOURCES_DIR/Audio Delay Updater.app"
+UPDATER_CONTENTS_DIR="$UPDATER_APP_DIR/Contents"
+UPDATER_MACOS_DIR="$UPDATER_CONTENTS_DIR/MacOS"
+UPDATER_RESOURCES_DIR="$UPDATER_CONTENTS_DIR/Resources"
+mkdir -p "$UPDATER_MACOS_DIR" "$UPDATER_RESOURCES_DIR"
+cp "$BIN_DIR/AudioDelayUpdater" "$UPDATER_MACOS_DIR/AudioDelayUpdater"
+cp "$UPDATER_INFO_SOURCE" "$UPDATER_CONTENTS_DIR/Info.plist"
+cp "$ICON_SOURCE" "$UPDATER_RESOURCES_DIR/AppIcon.icns"
+/usr/libexec/PlistBuddy \
+  -c "Set :CFBundleShortVersionString $APP_VERSION" \
+  "$UPDATER_CONTENTS_DIR/Info.plist"
+chmod 755 "$UPDATER_MACOS_DIR/AudioDelayUpdater"
+codesign --force --deep --sign - "$UPDATER_APP_DIR"
 if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
   echo "Update helper is missing: $UPDATE_SCRIPT_SOURCE" >&2
   exit 1

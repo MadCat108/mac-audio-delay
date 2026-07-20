@@ -45,7 +45,7 @@ The app temporarily chooses VB-CABLE as the system output and restores the origi
 
 ## Updating
 
-Choose **Audio Delay → Check for Updates…** for an immediate manual check. When an update is available, the app starts a separate local helper and closes. The helper downloads the latest public source, rebuilds the app locally, replaces the previous copy, and reopens it automatically.
+Choose **Audio Delay → Check for Updates…** for an immediate manual check. When an update is available, the app opens a foreground updater with live status and progress, then closes. The updater downloads the latest public source, rebuilds the app locally, replaces the previous copy, and reopens it automatically.
 
 Audio Delay also performs a quiet update check on startup when it has not checked successfully within the previous 24 hours. It prompts only when a newer version is available; up-to-date results and temporary network failures remain silent.
 
