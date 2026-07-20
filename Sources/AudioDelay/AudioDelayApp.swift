@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct AudioDelayApp: App {
+  @NSApplicationDelegateAdaptor(AudioDelayAppDelegate.self) private var appDelegate
   @StateObject private var model = AudioDelayModel()
   @StateObject private var updateManager = UpdateManager()
 
@@ -28,5 +29,22 @@ struct AudioDelayApp: App {
         .disabled(updateManager.isChecking)
       }
     }
+  }
+}
+
+final class AudioDelayAppDelegate: NSObject, NSApplicationDelegate {
+  func applicationShouldHandleReopen(
+    _ sender: NSApplication,
+    hasVisibleWindows flag: Bool
+  ) -> Bool {
+    let applicationWindows = sender.windows.filter(\.canBecomeMain)
+
+    for window in applicationWindows where window.isMiniaturized {
+      window.deminiaturize(nil)
+    }
+
+    applicationWindows.first?.makeKeyAndOrderFront(nil)
+    sender.activate(ignoringOtherApps: true)
+    return true
   }
 }
