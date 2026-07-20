@@ -16,7 +16,7 @@ final class AudioDelayModel: ObservableObject {
       case .waiting(let seconds):
         return "Audio begins in \(seconds) seconds"
       case .running:
-        return "Running"
+        return "Playing"
       }
     }
   }
@@ -25,6 +25,7 @@ final class AudioDelayModel: ObservableObject {
   @Published var outputDevices: [AudioDevice] = []
   @Published var selectedOutputID: AudioDeviceID?
   @Published var runState: RunState = .stopped
+  @Published private(set) var bufferProgress = 0.0
   @Published var errorMessage: String?
   @Published var isVBCableInstalled = false
 
@@ -34,6 +35,7 @@ final class AudioDelayModel: ObservableObject {
   private var originalOutputID: AudioDeviceID?
   private var countdownTimer: Timer?
   private var countdownDeadline: Date?
+  private var countdownDuration = 0.0
   private var stopping = false
 
   var isRunning: Bool { process?.isRunning == true }
@@ -92,6 +94,8 @@ final class AudioDelayModel: ObservableObject {
     countdownTimer?.invalidate()
     countdownTimer = nil
     countdownDeadline = nil
+    countdownDuration = 0
+    bufferProgress = 0
 
     if let process, process.isRunning {
       process.terminationHandler = nil
@@ -172,20 +176,28 @@ final class AudioDelayModel: ObservableObject {
   }
 
   private func beginCountdown(seconds: Double) {
+    countdownDuration = seconds
+    bufferProgress = 0
     countdownDeadline = Date().addingTimeInterval(seconds)
     updateCountdown()
-    countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+    countdownTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.updateCountdown() }
     }
   }
 
   private func updateCountdown() {
     guard let deadline = countdownDeadline else { return }
-    let remaining = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+    let remainingInterval = max(0, deadline.timeIntervalSinceNow)
+    if countdownDuration > 0 {
+      bufferProgress = min(1, max(0, 1 - remainingInterval / countdownDuration))
+    }
+    let remaining = max(0, Int(ceil(remainingInterval)))
     if remaining == 0 {
       countdownTimer?.invalidate()
       countdownTimer = nil
       countdownDeadline = nil
+      countdownDuration = 0
+      bufferProgress = 1
       runState = .running
     } else {
       runState = .waiting(remaining)
@@ -201,6 +213,11 @@ final class AudioDelayModel: ObservableObject {
 
   private func processEnded(status: Int32) {
     let wasStopping = stopping
+    countdownTimer?.invalidate()
+    countdownTimer = nil
+    countdownDeadline = nil
+    countdownDuration = 0
+    bufferProgress = 0
     cleanupProcess()
     restoreOriginalOutput()
     runState = .stopped

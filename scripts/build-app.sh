@@ -9,6 +9,7 @@ APP_DIR="$BUILD_DIR/Audio Delay.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICON_SOURCE="$PROJECT_DIR/Resources/AppIcon.icns"
 SOX_PATH="${SOX_PATH:-}"
 LOCAL_SOX=false
 
@@ -54,6 +55,13 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/AudioDelay" "$MACOS_DIR/AudioDelay"
 cp "$PROJECT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 chmod 755 "$MACOS_DIR/AudioDelay"
+
+if [[ ! -f "$ICON_SOURCE" ]]; then
+  echo "App icon source is missing: $ICON_SOURCE" >&2
+  exit 1
+fi
+
+cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.icns"
 
 if $LOCAL_SOX; then
   cp "$SOX_PATH" "$RESOURCES_DIR/sox"
