@@ -1,0 +1,9 @@
+/.build/
+/.build-app/
+/.build-cache/
+/.build-dependencies/
+/.build-local/
+/.build-test/
+/build/
+/release/
+.DS_Store
