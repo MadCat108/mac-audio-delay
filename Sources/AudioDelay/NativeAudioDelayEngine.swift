@@ -42,31 +42,55 @@ final class NativeAudioDelayEngine {
   private var tapID = AudioObjectID(kAudioObjectUnknown)
   private var aggregateID = AudioObjectID(kAudioObjectUnknown)
   private var processor: OpaquePointer?
+  private var tapDescription: CATapDescription?
+  private var selectedBundleIdentifier: String?
+  private var processListAddress = AudioObjectPropertyAddress(
+    mSelector: kAudioHardwarePropertyProcessObjectList,
+    mScope: kAudioObjectPropertyScopeGlobal,
+    mElement: kAudioObjectPropertyElementMain
+  )
+  private var processListListener: AudioObjectPropertyListenerBlock?
 
   deinit {
     stop()
   }
 
-  func start(delay seconds: Double, output: AudioDevice) throws {
+  func start(delay seconds: Double, output: AudioDevice, source: AudioSourceSelection) throws {
     stop()
 
     do {
-      let processID = try Self.currentProcessObjectID()
       let tapDescription = CATapDescription()
       tapDescription.name = "Audio Delay System Audio"
-      tapDescription.processes = [processID]
       tapDescription.isPrivate = true
       tapDescription.muteBehavior = .mutedWhenTapped
       tapDescription.isMixdown = true
       tapDescription.isMono = false
-      tapDescription.isExclusive = true
+
+      switch source {
+      case .allMacAudio:
+        tapDescription.processes = [try Self.currentProcessObjectID()]
+        tapDescription.isExclusive = true
+      case .application(let bundleIdentifier):
+        selectedBundleIdentifier = bundleIdentifier
+        tapDescription.processes = try Self.processObjectIDs(matching: bundleIdentifier)
+        tapDescription.isExclusive = false
+      }
+      self.tapDescription = tapDescription
 
       try Self.check(
         AudioHardwareCreateProcessTap(tapDescription, &tapID),
         "create the system-audio tap"
       )
 
-      let tapUID = try Self.stringProperty(tapID, selector: kAudioTapPropertyUID)
+      if selectedBundleIdentifier != nil {
+        try registerProcessListListener()
+      }
+
+      let tapUID = try Self.stringProperty(
+        tapID,
+        selector: kAudioTapPropertyUID,
+        action: "read the audio tap identifier"
+      )
       aggregateID = try Self.createAggregateDevice(output: output, tapUID: tapUID)
       try Self.requireFloat32Streams(on: aggregateID)
 
@@ -88,6 +112,7 @@ final class NativeAudioDelayEngine {
   }
 
   func stop() {
+    unregisterProcessListListener()
     if let processor {
       ADDelayProcessorDestroy(processor)
       self.processor = nil
@@ -100,6 +125,8 @@ final class NativeAudioDelayEngine {
       AudioHardwareDestroyProcessTap(tapID)
       tapID = AudioObjectID(kAudioObjectUnknown)
     }
+    tapDescription = nil
+    selectedBundleIdentifier = nil
   }
 
   func peakLevels() -> StereoPeak {
@@ -145,6 +172,108 @@ final class NativeAudioDelayEngine {
       throw NativeAudioDelayError.processUnavailable
     }
     return processID
+  }
+
+  private func registerProcessListListener() throws {
+    let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+      self?.refreshSelectedProcesses()
+    }
+    try Self.check(
+      AudioObjectAddPropertyListenerBlock(
+        AudioObjectID(kAudioObjectSystemObject),
+        &processListAddress,
+        DispatchQueue.main,
+        listener
+      ),
+      "monitor the selected application"
+    )
+    processListListener = listener
+  }
+
+  private func unregisterProcessListListener() {
+    guard let processListListener else { return }
+    AudioObjectRemovePropertyListenerBlock(
+      AudioObjectID(kAudioObjectSystemObject),
+      &processListAddress,
+      DispatchQueue.main,
+      processListListener
+    )
+    self.processListListener = nil
+  }
+
+  private func refreshSelectedProcesses() {
+    guard tapID != kAudioObjectUnknown,
+      let selectedBundleIdentifier,
+      let tapDescription,
+      let processIDs = try? Self.processObjectIDs(matching: selectedBundleIdentifier),
+      Set(processIDs) != Set(tapDescription.processes)
+    else {
+      return
+    }
+
+    tapDescription.processes = processIDs
+    var mutableDescription = tapDescription
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioTapPropertyDescription,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    let size = UInt32(MemoryLayout<CATapDescription>.stride)
+    _ = withUnsafeMutablePointer(to: &mutableDescription) { pointer in
+      AudioObjectSetPropertyData(tapID, &address, 0, nil, size, pointer)
+    }
+  }
+
+  private static func processObjectIDs(matching bundleIdentifier: String) throws
+    -> [AudioObjectID]
+  {
+    let systemObject = AudioObjectID(kAudioObjectSystemObject)
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioHardwarePropertyProcessObjectList,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var size: UInt32 = 0
+    try check(
+      AudioObjectGetPropertyDataSize(systemObject, &address, 0, nil, &size),
+      "list audio applications"
+    )
+    let count = Int(size) / MemoryLayout<AudioObjectID>.size
+    var processIDs = Array(repeating: AudioObjectID(kAudioObjectUnknown), count: count)
+    try check(
+      AudioObjectGetPropertyData(systemObject, &address, 0, nil, &size, &processIDs),
+      "list audio applications"
+    )
+
+    return processIDs.filter { processID in
+      guard let pid = processPID(processID) else { return false }
+      if AudioApplications.bundleIdentifier(forPID: pid) == bundleIdentifier {
+        return true
+      }
+      guard let processBundleIdentifier = try? stringProperty(
+        processID,
+        selector: kAudioProcessPropertyBundleID,
+        action: "read an audio application identifier"
+      ) else {
+        return false
+      }
+      return processBundleIdentifier == bundleIdentifier
+        || processBundleIdentifier.hasPrefix(bundleIdentifier + ".")
+    }
+  }
+
+  private static func processPID(_ processID: AudioObjectID) -> pid_t? {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioProcessPropertyPID,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var pid: pid_t = 0
+    var size = UInt32(MemoryLayout<pid_t>.size)
+    guard AudioObjectGetPropertyData(processID, &address, 0, nil, &size, &pid) == noErr else {
+      return nil
+    }
+    return pid
   }
 
   private static func createAggregateDevice(output: AudioDevice, tapUID: String) throws
@@ -247,7 +376,8 @@ final class NativeAudioDelayEngine {
 
   private static func stringProperty(
     _ objectID: AudioObjectID,
-    selector: AudioObjectPropertySelector
+    selector: AudioObjectPropertySelector,
+    action: String
   ) throws -> String {
     var address = AudioObjectPropertyAddress(
       mSelector: selector,
@@ -258,12 +388,12 @@ final class NativeAudioDelayEngine {
     var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
     try check(
       AudioObjectGetPropertyData(objectID, &address, 0, nil, &size, &value),
-      "read the audio tap identifier"
+      action
     )
     guard let value else {
       throw NativeAudioDelayError.coreAudio(
         kAudioHardwareUnspecifiedError,
-        "read the audio tap identifier"
+        action
       )
     }
     return value.takeUnretainedValue() as String

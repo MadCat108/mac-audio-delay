@@ -57,6 +57,31 @@ struct ContentView: View {
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
       VStack(alignment: .leading, spacing: 14) {
+        Label("Delay audio from", systemImage: "app.badge.waveform")
+          .font(.headline)
+
+        HStack(spacing: 10) {
+          AudioSourcePicker(
+            selection: $model.selectedSource,
+            applications: model.sourceApplications,
+            disabled: model.isRunning,
+            onOpen: model.refreshApplications
+          )
+          .frame(maxWidth: .infinity)
+
+          Button {
+            model.refreshApplications()
+          } label: {
+            Image(systemName: "arrow.clockwise")
+          }
+          .help("Refresh running applications")
+          .disabled(model.isRunning)
+        }
+      }
+      .padding(16)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+
+      VStack(alignment: .leading, spacing: 14) {
         Label("Play through", systemImage: "speaker.wave.2")
           .font(.headline)
 
@@ -144,7 +169,7 @@ struct ContentView: View {
       .background(.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
 
       Label(
-        "No virtual audio driver is required. macOS asks once for system-audio access.",
+        footerText,
         systemImage: "info.circle"
       )
       .font(.footnote)
@@ -184,5 +209,12 @@ struct ContentView: View {
     case .waiting: return .blue
     case .running: return .green
     }
+  }
+
+  private var footerText: String {
+    if let applicationName = model.selectedSourceApplicationName {
+      return "Only \(applicationName) is delayed while Playing. Other Mac audio plays normally."
+    }
+    return "All Mac audio is delayed while Playing. Press Stop to return to normal playback."
   }
 }

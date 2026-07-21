@@ -5,7 +5,7 @@ A small native macOS app that plays system audio through speakers or headphones 
 The signal path is entirely native:
 
 ```text
-Browser/system audio → private Core Audio tap → delay buffer → selected physical output
+Selected app or all system audio → private Core Audio tap → delay buffer → selected output
 ```
 
 Audio Delay does not require Homebrew, an audio driver, an administrator password, or a restart.
@@ -38,11 +38,18 @@ On first playback, macOS displays its normal system-audio recording permission p
 
 1. Open **Audio Delay**.
 2. Enter the delay in seconds.
-3. Select speakers, headphones, or another physical output.
-4. Press **Start**.
-5. Approve the system-audio permission popup on first use.
+3. Choose **All Mac Audio** or select one currently running application.
+4. Select speakers, headphones, or another output.
+5. Press **Start**.
+6. Approve the system-audio permission popup on first use.
 
-The app captures system audio using an Apple Core Audio process tap. The immediate copy is muted while the tap is active, and the app's own delayed output is excluded from capture to prevent feedback. The system's selected output does not change.
+The app captures audio using an Apple Core Audio process tap. In all-audio mode, every application except Audio Delay is captured. In selected-app mode, only the chosen application's processes are captured; other Mac audio continues normally. The immediate copy of captured audio is muted while the tap is active, and the delayed output is excluded from capture to prevent feedback. The system's selected output does not change.
+
+The delay, source application, and playback output are remembered between launches. If the saved application is no longer running, Audio Delay silently returns to **All Mac Audio**. If the saved output is unavailable, it uses the current macOS default output.
+
+## Delay limits
+
+The supported delay range is **1 to 3,600 seconds (one hour)**. The delay buffer is held in memory, so longer delays and higher output sample rates require more RAM. A one-hour stereo delay uses approximately 1.3 GiB at 48 kHz or 2.6 GiB at 96 kHz. If the buffer cannot be allocated, the app stops safely and displays an insufficient-memory message.
 
 ## Updating
 
