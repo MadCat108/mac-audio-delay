@@ -78,9 +78,76 @@ final class UpdateManager: ObservableObject {
     alert.alertStyle = .informational
     alert.addButton(withTitle: "Install Update")
     alert.addButton(withTitle: "Later")
+    alert.addButton(withTitle: "More Options…")
 
-    if alert.runModal() == .alertFirstButtonReturn {
+    switch alert.runModal() {
+    case .alertFirstButtonReturn:
       launchUpdater()
+    case .alertThirdButtonReturn:
+      presentOtherUpdateOptions(version)
+    default:
+      break
+    }
+  }
+
+  private func presentOtherUpdateOptions(_ version: String) {
+    let alert = NSAlert()
+    alert.messageText = "Other update options"
+    alert.informativeText =
+      "If the automatic updater is not working, Terminal can install version \(version) while showing the complete download and build output."
+    alert.alertStyle = .informational
+    alert.addButton(withTitle: "Install in Terminal…")
+    alert.addButton(withTitle: "Back")
+
+    guard alert.runModal() == .alertFirstButtonReturn else {
+      presentAvailableUpdate(version)
+      return
+    }
+
+    do {
+      try openManualInstallerInTerminal()
+    } catch {
+      presentFailure(error.localizedDescription)
+    }
+  }
+
+  private func openManualInstallerInTerminal() throws {
+    let commandURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("Audio-Delay-Manual-Update-\(UUID().uuidString).command")
+    let command = """
+      #!/bin/zsh
+      set -o pipefail
+
+      echo "Starting the Audio Delay manual update..."
+      /usr/bin/curl --fail --location --silent --show-error \
+        --proto '=https' --tlsv1.2 \
+        https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh \
+        | /bin/zsh
+      update_exit=$?
+
+      echo
+      if (( update_exit == 0 )); then
+        echo "Audio Delay was updated successfully."
+      else
+        echo "The update failed with status $update_exit."
+      fi
+      echo "Press any key to close this Terminal window."
+      read -k 1
+      echo
+      exit $update_exit
+      """
+
+    try command.write(to: commandURL, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o700],
+      ofItemAtPath: commandURL.path
+    )
+    guard NSWorkspace.shared.open(commandURL) else {
+      throw NSError(
+        domain: "AudioDelay",
+        code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "macOS could not open the Terminal command."]
+      )
     }
   }
 

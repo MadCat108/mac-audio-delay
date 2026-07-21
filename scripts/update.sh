@@ -31,17 +31,17 @@ if [[ "${AUDIO_DELAY_UPDATE_FOREGROUND:-0}" != "1" ]]; then
     >/dev/null 2>&1 || true
 fi
 
-status=0
+exit_code=0
 curl --fail --location --silent --show-error \
   --proto '=https' --tlsv1.2 \
   "https://raw.githubusercontent.com/$REPOSITORY/main/bootstrap.sh" \
-  -o "$BOOTSTRAP" || status=$?
+  -o "$BOOTSTRAP" || exit_code=$?
 
-if (( status == 0 )); then
-  /bin/zsh "$BOOTSTRAP" || status=$?
+if (( exit_code == 0 )); then
+  /bin/zsh "$BOOTSTRAP" || exit_code=$?
 fi
 
-if (( status == 0 )); then
+if (( exit_code == 0 )); then
   echo "Audio Delay update completed at $(date)"
   if [[ "${AUDIO_DELAY_UPDATE_FOREGROUND:-0}" != "1" ]]; then
     /usr/bin/osascript \
@@ -51,10 +51,10 @@ if (( status == 0 )); then
   exit 0
 fi
 
-echo "Audio Delay update failed with status $status at $(date)"
+echo "Audio Delay update failed with status $exit_code at $(date)"
 if [[ "${AUDIO_DELAY_UPDATE_FOREGROUND:-0}" != "1" ]]; then
   /usr/bin/osascript \
     -e 'display alert "Audio Delay update failed" message "Run the installer command again, or review Audio Delay Update.log in your Library/Logs folder." as critical buttons {"OK"} default button "OK"' \
     >/dev/null 2>&1 || true
 fi
-exit "$status"
+exit "$exit_code"

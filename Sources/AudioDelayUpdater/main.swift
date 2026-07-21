@@ -51,6 +51,7 @@ private final class UpdaterWindowController: NSWindowController {
   private let progress = NSProgressIndicator()
   private let statusLabel = NSTextField(labelWithString: "Preparing update…")
   private let detailLabel = NSTextField(wrappingLabelWithString: "")
+  private let terminalRetryButton = NSButton(title: "Retry in Terminal…", target: nil, action: nil)
   private let showLogButton = NSButton(title: "Show Log", target: nil, action: nil)
   private let closeButton = NSButton(title: "Close", target: nil, action: nil)
   private var process: Process?
@@ -170,12 +171,16 @@ private final class UpdaterWindowController: NSWindowController {
     showLogButton.target = self
     showLogButton.action = #selector(showLog)
     showLogButton.isHidden = true
+    terminalRetryButton.target = self
+    terminalRetryButton.action = #selector(retryInTerminal)
+    terminalRetryButton.bezelStyle = .rounded
+    terminalRetryButton.isHidden = true
     closeButton.target = self
     closeButton.action = #selector(closeUpdater)
     closeButton.bezelStyle = .rounded
     closeButton.isHidden = true
 
-    let buttons = NSStackView(views: [showLogButton, closeButton])
+    let buttons = NSStackView(views: [terminalRetryButton, showLogButton, closeButton])
     buttons.orientation = .horizontal
     buttons.alignment = .centerY
     buttons.spacing = 8
@@ -299,6 +304,7 @@ private final class UpdaterWindowController: NSWindowController {
     statusLabel.stringValue = status
     statusLabel.textColor = .systemRed
     detailLabel.stringValue = detail
+    terminalRetryButton.isHidden = false
     showLogButton.isHidden = false
     closeButton.isHidden = false
     window?.styleMask.insert(.closable)
@@ -307,6 +313,61 @@ private final class UpdaterWindowController: NSWindowController {
 
   @objc private func showLog() {
     NSWorkspace.shared.activateFileViewerSelecting([logURL])
+  }
+
+  @objc private func retryInTerminal() {
+    let alert = NSAlert()
+    alert.messageText = "Retry the update in Terminal?"
+    alert.informativeText =
+      "Terminal will download the official public source, rebuild Audio Delay locally, and show the complete installation output."
+    alert.alertStyle = .informational
+    alert.addButton(withTitle: "Open Terminal")
+    alert.addButton(withTitle: "Cancel")
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+    do {
+      let commandURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("Audio-Delay-Manual-Update-\(UUID().uuidString).command")
+      let command = """
+        #!/bin/zsh
+        set -o pipefail
+
+        echo "Starting the Audio Delay manual update..."
+        /usr/bin/curl --fail --location --silent --show-error \
+          --proto '=https' --tlsv1.2 \
+          https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh \
+          | /bin/zsh
+        update_exit=$?
+
+        echo
+        if (( update_exit == 0 )); then
+          echo "Audio Delay was updated successfully."
+        else
+          echo "The update failed with status $update_exit."
+        fi
+        echo "Press any key to close this Terminal window."
+        read -k 1
+        echo
+        exit $update_exit
+        """
+
+      try command.write(to: commandURL, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes(
+        [.posixPermissions: 0o700],
+        ofItemAtPath: commandURL.path
+      )
+      guard NSWorkspace.shared.open(commandURL) else {
+        throw NSError(
+          domain: "AudioDelayUpdater",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: "macOS could not open the Terminal command."]
+        )
+      }
+      detailLabel.stringValue = "The manual installer is now running in Terminal."
+    } catch {
+      detailLabel.stringValue = "Could not open Terminal: \(error.localizedDescription)"
+      NSApp.requestUserAttention(.criticalRequest)
+    }
   }
 
   @objc private func closeUpdater() {
