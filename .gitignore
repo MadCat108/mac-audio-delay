@@ -1,5 +1,6 @@
 /.build/
 /.build-app/
+/.build-app-direct/
 /.build-cache/
 /.build-dependencies/
 /.build-local/

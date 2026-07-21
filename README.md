@@ -27,7 +27,7 @@ The bootstrap script:
 
 1. Downloads this repository's source over HTTPS.
 2. Requests Apple's Command Line Tools through the normal macOS installer if they are missing.
-3. Builds the Swift app and native Core Audio engine locally.
+3. Builds the Swift app and native Core Audio engine locally with Apple's compilers.
 4. Ad-hoc signs the locally built app and installs it into `~/Applications`.
 
 The recipient does not need Xcode, Homebrew, an Apple Developer account, an audio driver, or administrator access. Apple's smaller Command Line Tools package is sufficient.
@@ -61,7 +61,9 @@ The current release version is stored in `VERSION`. Existing installations can a
 
 ## Local or maintainer build
 
-The local build requires Xcode or matching Apple Command Line Tools:
+The local app build requires Xcode or matching Apple Command Line Tools. It
+invokes Apple's Swift and C++ compilers directly, so the recipient installer
+does not depend on Swift Package Manager:
 
 ```bash
 ./scripts/build-app.sh

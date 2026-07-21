@@ -46,20 +46,20 @@ fi
 
 stop_running_app
 
-if ! xcrun --find swift >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1; then
+if ! xcrun --find swiftc >/dev/null 2>&1 || ! xcrun --find clang++ >/dev/null 2>&1; then
   echo "Apple Command Line Tools are required to build Audio Delay."
   echo "macOS will now open Apple's installer."
   xcode-select --install >/dev/null 2>&1 || true
 
   echo "Waiting for Apple Command Line Tools to finish installing..."
   for _ in {1..360}; do
-    if xcrun --find swift >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1; then
+    if xcrun --find swiftc >/dev/null 2>&1 && xcrun --find clang++ >/dev/null 2>&1; then
       break
     fi
     sleep 5
   done
 
-  if ! xcrun --find swift >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1; then
+  if ! xcrun --find swiftc >/dev/null 2>&1 || ! xcrun --find clang++ >/dev/null 2>&1; then
     echo "Apple Command Line Tools did not finish installing." >&2
     echo "Run this setup again after their installation completes." >&2
     exit 1

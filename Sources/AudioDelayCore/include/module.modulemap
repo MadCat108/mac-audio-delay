@@ -1,0 +1,5 @@
+module AudioDelayCore {
+  header "AudioDelayCore.h"
+  link framework "CoreAudio"
+  export *
+}
