@@ -7,11 +7,7 @@ APP_SOURCE="$SCRIPT_DIR/build/Audio Delay.app"
 INSTALL_DIR="${AUDIO_DELAY_INSTALL_DIR:-$HOME/Applications}"
 APP_DEST="$INSTALL_DIR/Audio Delay.app"
 MINIMUM_MACOS_MAJOR=14
-
-has_vb_cable() {
-  [[ -d /Library/Audio/Plug-Ins/HAL/VBCable.driver ]] || \
-    system_profiler SPAudioDataType 2>/dev/null | grep -qi 'VB-Cable'
-}
+MINIMUM_MACOS_MINOR=2
 
 stop_running_app() {
   if ! /usr/bin/pgrep -x AudioDelay >/dev/null 2>&1; then
@@ -38,9 +34,13 @@ if [[ "$(uname -m)" != "arm64" ]]; then
   exit 1
 fi
 
-macos_major="$(sw_vers -productVersion | cut -d. -f1)"
-if (( macos_major < MINIMUM_MACOS_MAJOR )); then
-  echo "Audio Delay requires macOS 14 or newer." >&2
+macos_version="$(sw_vers -productVersion)"
+macos_major="${macos_version%%.*}"
+macos_remainder="${macos_version#*.}"
+macos_minor="${macos_remainder%%.*}"
+if (( macos_major < MINIMUM_MACOS_MAJOR )) || \
+  (( macos_major == MINIMUM_MACOS_MAJOR && macos_minor < MINIMUM_MACOS_MINOR )); then
+  echo "Audio Delay requires macOS 14.2 or newer." >&2
   exit 1
 fi
 
@@ -64,10 +64,6 @@ if ! xcrun --find swift >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1;
     echo "Run this setup again after their installation completes." >&2
     exit 1
   fi
-fi
-
-if ! has_vb_cable && [[ "${AUDIO_DELAY_SKIP_VB_CABLE:-0}" != "1" ]]; then
-  "$SCRIPT_DIR/scripts/install-vb-cable.sh"
 fi
 
 echo "Building Audio Delay locally on this Mac..."

@@ -1,4 +1,3 @@
-import AVFoundation
 import CoreAudio
 import Foundation
 
@@ -32,20 +31,15 @@ final class AudioDelayModel: ObservableObject {
   @Published private(set) var bufferProgress = 0.0
   @Published private(set) var peakLevels = StereoPeak.zero
   @Published var errorMessage: String?
-  @Published var isVBCableInstalled = false
 
-  private var process: Process?
+  private var engine: NativeAudioDelayEngine?
   private let preferences: UserDefaults
-  private var errorPipe: Pipe?
-  private var recentError = Data()
-  private var meterTextBuffer = ""
-  private var originalOutputID: AudioDeviceID?
   private var countdownTimer: Timer?
+  private var meterTimer: Timer?
   private var countdownDeadline: Date?
   private var countdownDuration = 0.0
-  private var stopping = false
 
-  var isRunning: Bool { process?.isRunning == true }
+  var isRunning: Bool { engine != nil }
 
   init(preferences: UserDefaults = .standard) {
     self.preferences = preferences
@@ -56,10 +50,7 @@ final class AudioDelayModel: ObservableObject {
   func refreshDevices() {
     do {
       let devices = try AudioDevices.all()
-      isVBCableInstalled = AudioDevices.vbCable(in: devices) != nil
-      outputDevices = devices.filter {
-        $0.hasOutput && !$0.name.localizedCaseInsensitiveContains("VB-Cable")
-      }
+      outputDevices = devices.filter(\.hasOutput)
 
       if let selectedOutputID,
         outputDevices.contains(where: { $0.id == selectedOutputID })
@@ -87,101 +78,42 @@ final class AudioDelayModel: ObservableObject {
       return
     }
 
-    requestAudioPermission { [weak self] granted in
-      guard let self else { return }
-      if granted {
-        self.launch(seconds: seconds, output: output)
-      } else {
-        self.errorMessage =
-          "Audio input permission is required. Reopen Audio Delay after allowing microphone access."
-      }
-    }
+    launch(seconds: seconds, output: output)
   }
 
   func stop() {
-    stopping = true
     countdownTimer?.invalidate()
     countdownTimer = nil
+    meterTimer?.invalidate()
+    meterTimer = nil
     countdownDeadline = nil
     countdownDuration = 0
     bufferProgress = 0
     peakLevels = .zero
-
-    if let process, process.isRunning {
-      process.terminationHandler = nil
-      process.terminate()
-    }
-    cleanupProcess()
-    restoreOriginalOutput()
+    engine?.stop()
+    engine = nil
     runState = .stopped
-    stopping = false
-  }
-
-  private func requestAudioPermission(completion: @escaping @MainActor (Bool) -> Void) {
-    switch AVCaptureDevice.authorizationStatus(for: .audio) {
-    case .authorized:
-      completion(true)
-    case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .audio) { granted in
-        Task { @MainActor in completion(granted) }
-      }
-    default:
-      completion(false)
-    }
   }
 
   private func launch(seconds: Double, output: AudioDevice) {
     do {
-      let devices = try AudioDevices.all()
-      guard let cable = AudioDevices.vbCable(in: devices) else {
-        isVBCableInstalled = false
-        throw AudioDeviceError.deviceNotFound("VB-Cable")
+      guard #available(macOS 14.2, *) else {
+        throw NativeAudioDelayError.unsupportedSystem
       }
-
-      guard let soxURL = Self.soxExecutableURL() else {
-        throw NSError(
-          domain: "AudioDelay",
-          code: 1,
-          userInfo: [NSLocalizedDescriptionKey: "The bundled SoX audio engine is missing."]
-        )
-      }
-
-      originalOutputID = try AudioDevices.defaultOutputID()
-      try AudioDevices.setDefaultOutput(cable.id)
-
-      let value = DelayValidation.commandValue(seconds)
-      let process = Process()
-      let pipe = Pipe()
-      process.executableURL = soxURL
-      process.arguments = [
-        "-S",
-        "-t", "coreaudio", cable.name,
-        "-r", "48000", "-c", "2",
-        "-t", "coreaudio", output.name,
-        "delay", value, value,
-      ]
-      process.standardOutput = FileHandle.nullDevice
-      process.standardError = pipe
-      recentError.removeAll(keepingCapacity: true)
-      meterTextBuffer.removeAll(keepingCapacity: true)
+      let engine = NativeAudioDelayEngine()
+      try engine.start(delay: seconds, output: output)
+      self.engine = engine
       peakLevels = .zero
-      pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-        let data = handle.availableData
-        guard !data.isEmpty else { return }
-        Task { @MainActor in self?.handleEngineOutput(data) }
+      meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        Task { @MainActor in
+          guard let self, let engine = self.engine else { return }
+          self.peakLevels = engine.peakLevels()
+        }
       }
-      process.terminationHandler = { [weak self] process in
-        let status = process.terminationStatus
-        Task { @MainActor in self?.processEnded(status: status) }
-      }
-
-      self.process = process
-      errorPipe = pipe
-      try process.run()
       beginCountdown(seconds: seconds)
     } catch {
-      cleanupProcess()
-      restoreOriginalOutput()
+      engine?.stop()
+      engine = nil
       errorMessage = error.localizedDescription
       runState = .stopped
     }
@@ -216,63 +148,4 @@ final class AudioDelayModel: ObservableObject {
     }
   }
 
-  private func handleEngineOutput(_ data: Data) {
-    recentError.append(data)
-    if recentError.count > 32_768 {
-      recentError.removeFirst(recentError.count - 32_768)
-    }
-
-    meterTextBuffer += String(decoding: data, as: UTF8.self)
-    if meterTextBuffer.count > 1_024 {
-      meterTextBuffer = String(meterTextBuffer.suffix(1_024))
-    }
-    if let peak = PeakMeterParser.parseLast(in: meterTextBuffer) {
-      peakLevels = peak
-    }
-  }
-
-  private func processEnded(status: Int32) {
-    let wasStopping = stopping
-    countdownTimer?.invalidate()
-    countdownTimer = nil
-    countdownDeadline = nil
-    countdownDuration = 0
-    bufferProgress = 0
-    peakLevels = .zero
-    cleanupProcess()
-    restoreOriginalOutput()
-    runState = .stopped
-
-    if status != 0 && !wasStopping {
-      let text = String(data: recentError, encoding: .utf8)?.trimmingCharacters(
-        in: .whitespacesAndNewlines)
-      errorMessage = text?.isEmpty == false ? text : "The audio engine stopped unexpectedly."
-    }
-  }
-
-  private func cleanupProcess() {
-    errorPipe?.fileHandleForReading.readabilityHandler = nil
-    errorPipe = nil
-    process = nil
-    meterTextBuffer.removeAll(keepingCapacity: true)
-  }
-
-  private func restoreOriginalOutput() {
-    guard let originalOutputID else { return }
-    try? AudioDevices.setDefaultOutput(originalOutputID)
-    self.originalOutputID = nil
-  }
-
-  private static func soxExecutableURL() -> URL? {
-    let bundled = Bundle.main.resourceURL?.appendingPathComponent("sox")
-    if let bundled, FileManager.default.isExecutableFile(atPath: bundled.path) {
-      return bundled
-    }
-
-    for path in ["/opt/homebrew/bin/sox", "/usr/local/bin/sox"]
-    where FileManager.default.isExecutableFile(atPath: path) {
-      return URL(fileURLWithPath: path)
-    }
-    return nil
-  }
 }

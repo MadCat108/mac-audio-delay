@@ -17,27 +17,11 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 5) {
           Text("Audio Delay")
             .font(.largeTitle.weight(.semibold))
-          Text("Play Mac's audio through VB-CABLE after a fixed delay.")
+          Text("Play your Mac's audio after a fixed delay.")
             .foregroundStyle(.secondary)
         }
 
         Spacer()
-      }
-
-      if !model.isVBCableInstalled {
-        HStack(alignment: .top, spacing: 10) {
-          Image(systemName: "exclamationmark.triangle.fill")
-            .foregroundStyle(.orange)
-          VStack(alignment: .leading, spacing: 4) {
-            Text("VB-CABLE is not installed")
-              .fontWeight(.medium)
-            Link(
-              "Download it from VB-Audio",
-              destination: URL(string: "https://vb-audio.com/Cable/index.htm")!)
-          }
-        }
-        .padding(12)
-        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
       }
 
       VStack(alignment: .leading, spacing: 14) {
@@ -116,7 +100,7 @@ struct ContentView: View {
       .controlSize(.large)
       .tint(model.isRunning ? .red : .accentColor)
       .keyboardShortcut(.defaultAction)
-      .disabled(!model.isRunning && !model.isVBCableInstalled)
+      .disabled(!model.isRunning && model.selectedOutputID == nil)
 
       VStack(alignment: .leading, spacing: 10) {
         if isBuffering {
@@ -160,7 +144,7 @@ struct ContentView: View {
       .background(.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
 
       Label(
-        "Your original audio output is restored when you stop or quit the app.",
+        "No virtual audio driver is required. macOS asks once for system-audio access.",
         systemImage: "info.circle"
       )
       .font(.footnote)

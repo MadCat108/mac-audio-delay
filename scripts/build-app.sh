@@ -13,18 +13,6 @@ ICON_SOURCE="$PROJECT_DIR/Resources/AppIcon.icns"
 UPDATER_INFO_SOURCE="$PROJECT_DIR/Resources/UpdaterInfo.plist"
 UPDATE_SCRIPT_SOURCE="$PROJECT_DIR/scripts/update.sh"
 VERSION_FILE="$PROJECT_DIR/VERSION"
-SOX_PATH="${SOX_PATH:-}"
-LOCAL_SOX=false
-
-if [[ -z "$SOX_PATH" ]]; then
-  SOX_PATH="$("$SCRIPT_DIR/build-sox.sh")"
-  LOCAL_SOX=true
-fi
-
-if [[ ! -x "$SOX_PATH" ]]; then
-  echo "SoX is not executable: $SOX_PATH" >&2
-  exit 1
-fi
 
 if [[ ! -f "$VERSION_FILE" ]]; then
   echo "Version file is missing: $VERSION_FILE" >&2
@@ -103,19 +91,6 @@ if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
 fi
 cp "$UPDATE_SCRIPT_SOURCE" "$RESOURCES_DIR/update.sh"
 chmod 755 "$RESOURCES_DIR/update.sh"
-
-if $LOCAL_SOX; then
-  cp "$SOX_PATH" "$RESOURCES_DIR/sox"
-  chmod 755 "$RESOURCES_DIR/sox"
-  mkdir -p "$RESOURCES_DIR/licenses/sox"
-  SOX_SOURCE_DIR="$PROJECT_DIR/.build-dependencies/sox/source/sox-14.4.2"
-  cp "$SOX_SOURCE_DIR/LICENSE.GPL" "$RESOURCES_DIR/licenses/sox/"
-  cp "$SOX_SOURCE_DIR/LICENSE.LGPL" "$RESOURCES_DIR/licenses/sox/"
-  cp "$SOX_SOURCE_DIR/COPYING" "$RESOURCES_DIR/licenses/sox/"
-  codesign --force --sign - "$RESOURCES_DIR/sox"
-else
-  "$SCRIPT_DIR/bundle-sox.sh" "$SOX_PATH" "$RESOURCES_DIR"
-fi
 
 codesign --force --deep --sign - "$APP_DIR"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"

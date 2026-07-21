@@ -14,14 +14,11 @@ struct AudioDevice: Identifiable, Hashable {
 
 enum AudioDeviceError: LocalizedError {
   case coreAudio(OSStatus, String)
-  case deviceNotFound(String)
 
   var errorDescription: String? {
     switch self {
     case .coreAudio(let status, let action):
       return "Core Audio could not \(action) (error \(status))."
-    case .deviceNotFound(let name):
-      return "The audio device “\(name)” was not found."
     }
   }
 }
@@ -78,26 +75,6 @@ enum AudioDevices {
       throw AudioDeviceError.coreAudio(status, "read the default output")
     }
     return id
-  }
-
-  static func setDefaultOutput(_ id: AudioDeviceID) throws {
-    var address = AudioObjectPropertyAddress(
-      mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    var mutableID = id
-    let size = UInt32(MemoryLayout<AudioDeviceID>.size)
-    let status = AudioObjectSetPropertyData(systemObject, &address, 0, nil, size, &mutableID)
-    guard status == noErr else {
-      throw AudioDeviceError.coreAudio(status, "change the default output")
-    }
-  }
-
-  static func vbCable(in devices: [AudioDevice]) -> AudioDevice? {
-    devices.first {
-      $0.hasInput && $0.name.localizedCaseInsensitiveContains("VB-Cable")
-    }
   }
 
   private static func stringProperty(_ id: AudioObjectID, selector: AudioObjectPropertySelector)

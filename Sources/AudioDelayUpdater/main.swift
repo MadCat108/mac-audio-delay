@@ -242,16 +242,10 @@ private final class UpdaterWindowController: NSWindowController {
       updateStage(progress: 20, status: line, detail: "Verifying the downloaded source")
     case lower.contains("command line tools"):
       updateStage(progress: 22, status: "Checking Apple build tools…", detail: line)
-    case lower.contains("vb-cable"):
-      updateStage(progress: 27, status: "Checking VB-CABLE…", detail: line)
     case lower.contains("building audio delay locally"):
-      updateStage(progress: 32, status: "Preparing the local build…", detail: line)
-    case lower.contains("downloading the official sox"):
-      updateStage(progress: 40, status: "Downloading the audio engine…", detail: line)
-    case lower.contains("building the minimal coreaudio"):
-      updateStage(progress: 56, status: "Building the audio engine…", detail: "This is normally the longest step")
+      updateStage(progress: 32, status: "Preparing the native audio engine…", detail: line)
     case lower.contains("building for production"):
-      updateStage(progress: 76, status: "Building Audio Delay…", detail: "Compiling the latest application")
+      updateStage(progress: 62, status: "Building Audio Delay…", detail: "Compiling the latest application")
     case lower.contains("build of product"):
       updateStage(progress: 88, status: "Finishing the application…", detail: line)
     case lower.hasPrefix("built:"):

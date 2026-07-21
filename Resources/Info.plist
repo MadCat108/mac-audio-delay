@@ -18,15 +18,15 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.6</string>
+	<string>0.3.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>14.2</string>
     <key>NSHighResolutionCapable</key>
     <true/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Audio Delay needs access to VB-CABLE audio input so it can play the stream after the selected delay.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Audio Delay needs access to your Mac's audio so it can play it after the selected delay.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

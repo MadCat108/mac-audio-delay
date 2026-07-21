@@ -1,18 +1,19 @@
 # Audio Delay for macOS
 
-A small macOS app that sends audio from VB-CABLE to speakers or headphones after a configurable fixed delay. It is designed for secure browser streams that cannot be opened directly by VLC or another player.
+A small native macOS app that plays system audio through speakers or headphones after a configurable fixed delay. It is designed for secure browser streams that cannot be opened directly by VLC or another player.
 
-The tested signal path is:
+The signal path is entirely native:
 
 ```text
-Browser/system audio → VB-CABLE → bundled SoX → selected physical output
+Browser/system audio → private Core Audio tap → delay buffer → selected physical output
 ```
+
+Audio Delay does not require Homebrew, an audio driver, an administrator password, or a restart.
 
 ## Supported Macs
 
-- macOS 14 Sonoma or newer
+- macOS 14.2 Sonoma or newer
 - Apple Silicon
-- Standard two-channel VB-CABLE for macOS
 
 ## Recipient installation
 
@@ -26,13 +27,12 @@ The bootstrap script:
 
 1. Downloads this repository's source over HTTPS.
 2. Requests Apple's Command Line Tools through the normal macOS installer if they are missing.
-3. Downloads the unchanged official VB-CABLE package and verifies its pinned SHA-256 checksum, Apple notarization, and developer signature.
-4. Displays VB-Audio's identity, donationware notice, and licensing links and requires explicit agreement.
-5. Installs VB-CABLE silently after the user approves the standard macOS administrator popup.
-6. Downloads and verifies the official SoX 14.4.2 source, then builds a minimal CoreAudio-only helper locally.
-7. Builds and ad-hoc signs `Audio Delay.app` locally and installs it into `~/Applications`.
+3. Builds the Swift app and native Core Audio engine locally.
+4. Ad-hoc signs the locally built app and installs it into `~/Applications`.
 
-The recipient does not need Xcode, Homebrew, or an Apple Developer account. Apple's smaller Command Line Tools package is sufficient. On first use, the recipient must approve the normal macOS audio-input permission popup. If they deny it, macOS requires them to re-enable access manually in System Settings.
+The recipient does not need Xcode, Homebrew, an Apple Developer account, an audio driver, or administrator access. Apple's smaller Command Line Tools package is sufficient.
+
+On first playback, macOS displays its normal system-audio recording permission popup. Choose **Allow**. macOS remembers the choice. If access is denied, it must be re-enabled manually under **System Settings → Privacy & Security → Screen & System Audio Recording**.
 
 ## Everyday use
 
@@ -40,8 +40,9 @@ The recipient does not need Xcode, Homebrew, or an Apple Developer account. Appl
 2. Enter the delay in seconds.
 3. Select speakers, headphones, or another physical output.
 4. Press **Start**.
+5. Approve the system-audio permission popup on first use.
 
-The app temporarily chooses VB-CABLE as the system output and restores the original output when stopped or closed. All system audio is routed through the delay while it is running.
+The app captures system audio using an Apple Core Audio process tap. The immediate copy is muted while the tap is active, and the app's own delayed output is excluded from capture to prevent feedback. The system's selected output does not change.
 
 ## Updating
 
@@ -49,11 +50,11 @@ Choose **Audio Delay → Check for Updates…** for an immediate manual check. W
 
 Audio Delay also performs a quiet update check on startup when it has not checked successfully within the previous 24 hours. It prompts only when a newer version is available; up-to-date results and temporary network failures remain silent.
 
-The current release version is stored in `VERSION`. Existing installations from before the in-app updater was added can upgrade by running the original installation command again.
+The current release version is stored in `VERSION`. Existing installations can also upgrade by running the installation command again.
 
 ## Local or maintainer build
 
-The local build requires Xcode or matching Apple Command Line Tools. SoX is downloaded from its official SourceForge release, verified, and compiled locally without Homebrew.
+The local build requires Xcode or matching Apple Command Line Tools:
 
 ```bash
 ./scripts/build-app.sh
@@ -73,32 +74,22 @@ GitHub Actions repeats the unit tests and full local app build on an Apple Silic
 swift test
 ```
 
-For a short live test, choose a five-second delay in the app. Start with disposable browser audio before using an important stream.
-
-## VB-CABLE download and licensing
-
-VB-CABLE is not committed to or rehosted by this repository. The installer downloads the unchanged standard package from VB-Audio’s official server. Its pinned archive checksum is:
-
-```text
-e46b41c6876995403cb1da37d7c0d566f59edd83aa9fcbcdc3a205eb0b6e05c7
-```
-
-VB-CABLE is donationware; users must be able to identify its origin and donate or purchase a license. Professional and organizational use may require a paid license. The standard package's current distribution terms permit silent installation when the donationware model remains visible. The installer therefore shows the notice and requires agreement before requesting administrator authorization.
-
-- Product: https://vb-audio.com/Cable/
-- Licensing: https://vb-audio.com/Services/licensing.htm
-
-The paid VB-CABLE A+B and C+D packages are not used or distributed.
+For a short live test, choose a five-second delay in the app. Start with disposable browser audio before using an important stream. Confirm the exact secure stream works before removing an already-installed virtual audio driver, because some DRM-protected sources may refuse system-audio capture.
 
 ## Security model
 
-- The app installs only in the current user’s `~/Applications` directory.
-- The app executable and SoX helper are compiled locally from source.
-- The SoX and VB-CABLE downloads use HTTPS and pinned SHA-256 checksums.
-- The VB-CABLE package must be notarized by Apple and signed by `Developer ID Installer: Vincent Burel (6K8JQXLBSY)`.
-- No terminal `sudo` password prompt is used. VB-CABLE's required system installation uses the standard macOS administrator-approval dialog.
+- The app installs only in the current user's `~/Applications` directory.
+- All executable code is compiled locally from the public source in this repository.
+- Runtime audio capture, buffering, and playback use only Apple Core Audio APIs.
+- No administrator password, privileged installer, system audio driver, or restart is required.
 - In-app updates use the same public source bootstrap as the original installation and keep a diagnostic log at `~/Library/Logs/Audio Delay Update.log`.
-- VB-CABLE is installed only after the user sees its origin, donationware status, and licensing links and explicitly agrees.
 - The locally built app is ad-hoc signed. Organization-managed Macs may still impose additional application-control policies.
 
 The one-line bootstrap executes source obtained from this public repository. Security-conscious users should inspect `bootstrap.sh`, `install.sh`, and the scripts under `scripts/` before running it.
+
+## Native API reference
+
+The implementation follows Apple's Core Audio process-tap architecture:
+
+- https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps
+- https://developer.apple.com/documentation/coreaudio/catapmutebehavior

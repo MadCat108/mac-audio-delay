@@ -11,4 +11,4 @@ fi
 
 osascript -e 'tell application "Audio Delay" to quit' 2>/dev/null || true
 mv "$APP" "$HOME/.Trash/Audio Delay.app"
-echo "Moved Audio Delay to the Trash. VB-CABLE was left installed."
+echo "Moved Audio Delay to the Trash."

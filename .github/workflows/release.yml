@@ -20,7 +20,5 @@ jobs:
       - name: Verify architecture
         run: |
           file "build/Audio Delay.app/Contents/MacOS/AudioDelay"
-          file "build/Audio Delay.app/Contents/Resources/sox"
           test "$(uname -m)" = "arm64"
-          test -z "$(otool -L "build/Audio Delay.app/Contents/Resources/sox" | grep -v ':$' | grep -v '/System/' | grep -v '/usr/lib/' || true)"
           codesign --verify --deep --strict --verbose=2 "build/Audio Delay.app"

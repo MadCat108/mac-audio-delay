@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "MacAudioDelay",
     platforms: [
-        .macOS(.v14)
+        .macOS("14.2")
     ],
     products: [
         .executable(name: "AudioDelay", targets: ["AudioDelay"]),
@@ -14,7 +14,16 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AudioDelay",
+            dependencies: ["AudioDelayCore"],
             path: "Sources/AudioDelay"
+        ),
+        .target(
+            name: "AudioDelayCore",
+            path: "Sources/AudioDelayCore",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedFramework("CoreAudio")
+            ]
         ),
         .executableTarget(
             name: "AudioDelayUpdater",
