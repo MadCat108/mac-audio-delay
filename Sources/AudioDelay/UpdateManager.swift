@@ -72,11 +72,12 @@ final class UpdateManager: ObservableObject {
 
   private func presentAvailableUpdate(_ version: String) {
     let alert = NSAlert()
-    alert.messageText = "Audio Delay update available"
+    alert.messageText = "A new version is available"
     alert.informativeText =
-      "You have version \(currentVersionText). Version \(version) is available.\n\nInstall it now? Audio Delay will close, rebuild locally, and reopen automatically."
+      "Audio Delay will close, update itself locally, and reopen automatically."
+    alert.accessoryView = versionSummaryView(availableVersion: version)
     alert.alertStyle = .informational
-    alert.addButton(withTitle: "Install Update")
+    alert.addButton(withTitle: "Update Now")
     alert.addButton(withTitle: "Later")
     alert.addButton(withTitle: "More Options…")
 
@@ -88,6 +89,45 @@ final class UpdateManager: ObservableObject {
     default:
       break
     }
+  }
+
+  private func versionSummaryView(availableVersion: String) -> NSView {
+    let currentHeading = NSTextField(labelWithString: "CURRENT VERSION")
+    currentHeading.font = .systemFont(ofSize: 10, weight: .medium)
+    currentHeading.textColor = .secondaryLabelColor
+
+    let currentValue = NSTextField(labelWithString: currentVersionText)
+    currentValue.font = .monospacedDigitSystemFont(ofSize: 14, weight: .regular)
+    currentValue.textColor = .secondaryLabelColor
+
+    let availableHeading = NSTextField(labelWithString: "NEW VERSION")
+    availableHeading.font = .systemFont(ofSize: 10, weight: .semibold)
+    availableHeading.textColor = .controlAccentColor
+
+    let availableValue = NSTextField(labelWithString: availableVersion)
+    availableValue.font = .monospacedDigitSystemFont(ofSize: 22, weight: .semibold)
+    availableValue.textColor = .labelColor
+
+    let separator = NSBox()
+    separator.boxType = .separator
+
+    let stack = NSStackView(views: [
+      currentHeading,
+      currentValue,
+      separator,
+      availableHeading,
+      availableValue,
+    ])
+    stack.orientation = .vertical
+    stack.alignment = .leading
+    stack.spacing = 4
+    stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+    stack.wantsLayer = true
+    stack.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+    stack.layer?.cornerRadius = 9
+    stack.widthAnchor.constraint(equalToConstant: 320).isActive = true
+    separator.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+    return stack
   }
 
   private func presentOtherUpdateOptions(_ version: String) {

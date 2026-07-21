@@ -22,12 +22,33 @@ struct AudioDelayApp: App {
     .windowResizability(.contentSize)
     .commands {
       CommandGroup(replacing: .newItem) {}
-      CommandGroup(after: .appInfo) {
-        Button("Check for Updates…") {
-          updateManager.checkForUpdates()
-        }
-        .disabled(updateManager.isChecking)
+      AudioDelayCommands(updateManager: updateManager)
+    }
+
+    Window("About Audio Delay", id: "about") {
+      AboutView(updateManager: updateManager)
+    }
+    .windowResizability(.contentSize)
+    .defaultPosition(.center)
+  }
+}
+
+private struct AudioDelayCommands: Commands {
+  @Environment(\.openWindow) private var openWindow
+  @ObservedObject var updateManager: UpdateManager
+
+  var body: some Commands {
+    CommandGroup(replacing: .appInfo) {
+      Button("About Audio Delay") {
+        openWindow(id: "about")
       }
+    }
+
+    CommandGroup(after: .appInfo) {
+      Button("Check for Updates…") {
+        updateManager.checkForUpdates()
+      }
+      .disabled(updateManager.isChecking)
     }
   }
 }
