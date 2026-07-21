@@ -29,18 +29,19 @@ struct AboutView: View {
           .background(.secondary.opacity(0.11), in: Capsule())
       }
 
-      Text("Delay all Mac audio—or one application—by up to one hour.")
+      Text("Route or delay all Mac audio or a single application for up to one hour.")
         .font(.body)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 310)
+        .fixedSize(horizontal: false, vertical: true)
 
       Divider()
         .padding(.horizontal, 8)
 
       HStack(spacing: 10) {
         Button {
-          updateManager.checkForUpdates()
+          updateManager.checkForUpdates(reportsResultInline: true)
         } label: {
           Label(
             updateManager.isChecking ? "Checking…" : "Check for Updates",
@@ -56,6 +57,14 @@ struct AboutView: View {
         .buttonStyle(.bordered)
       }
 
+      ZStack {
+        if let result = updateManager.inlineCheckResult {
+          inlineUpdateResult(result)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+      }
+      .frame(maxWidth: .infinity, minHeight: 26)
+
       HStack(spacing: 5) {
         Text("Open source")
         Text("·")
@@ -68,5 +77,22 @@ struct AboutView: View {
     .padding(.horizontal, 30)
     .padding(.vertical, 26)
     .frame(width: 410)
+    .animation(.easeOut(duration: 0.2), value: updateManager.inlineCheckResult)
+  }
+
+  @ViewBuilder
+  private func inlineUpdateResult(_ result: UpdateManager.InlineCheckResult) -> some View {
+    switch result {
+    case .upToDate(let version):
+      Label("You’re up to date — version \(version).", systemImage: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
+    case .failure(let message):
+      Label(message, systemImage: "exclamationmark.triangle.fill")
+        .foregroundStyle(.orange)
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
+    }
   }
 }

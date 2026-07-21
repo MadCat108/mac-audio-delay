@@ -3,7 +3,13 @@ import Foundation
 
 @MainActor
 final class UpdateManager: ObservableObject {
+  enum InlineCheckResult: Equatable {
+    case upToDate(String)
+    case failure(String)
+  }
+
   @Published private(set) var isChecking = false
+  @Published private(set) var inlineCheckResult: InlineCheckResult?
 
   private let automaticCheckInterval: TimeInterval = 24 * 60 * 60
   private let lastCheckKey = "LastSuccessfulUpdateCheck"
@@ -15,13 +21,16 @@ final class UpdateManager: ObservableObject {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
   }
 
-  func checkForUpdates(interactive: Bool = true) {
+  func checkForUpdates(interactive: Bool = true, reportsResultInline: Bool = false) {
     guard !isChecking else { return }
     if !interactive,
       let lastCheck = UserDefaults.standard.object(forKey: lastCheckKey) as? Date,
       Date().timeIntervalSince(lastCheck) < automaticCheckInterval
     {
       return
+    }
+    if reportsResultInline {
+      inlineCheckResult = nil
     }
     isChecking = true
 
@@ -39,11 +48,19 @@ final class UpdateManager: ObservableObject {
         if current < latest {
           presentAvailableUpdate(latest.description)
         } else if interactive {
-          presentUpToDate()
+          if reportsResultInline {
+            inlineCheckResult = .upToDate(currentVersionText)
+          } else {
+            presentUpToDate()
+          }
         }
       } catch {
         if interactive {
-          presentFailure(error.localizedDescription)
+          if reportsResultInline {
+            inlineCheckResult = .failure(error.localizedDescription)
+          } else {
+            presentFailure(error.localizedDescription)
+          }
         }
       }
     }

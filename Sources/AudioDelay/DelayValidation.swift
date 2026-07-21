@@ -1,7 +1,7 @@
 import Foundation
 
 enum DelayValidation {
-  static let minimumSeconds = 1.0
+  static let minimumSeconds = 0.0
   static let maximumSeconds = 3_600.0
 
   static func parse(_ text: String) -> Double? {

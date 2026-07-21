@@ -118,7 +118,7 @@ final class AudioDelayModel: ObservableObject {
   func start() {
     guard !isRunning else { return }
     guard let seconds = DelayValidation.parse(delayText) else {
-      errorMessage = "Enter a delay between 1 and 3600 seconds."
+      errorMessage = "Enter a delay between 0 and 3600 seconds."
       return
     }
     guard let output = outputDevices.first(where: { $0.id == selectedOutputID }) else {

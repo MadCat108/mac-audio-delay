@@ -24,8 +24,8 @@ final class DelayPreferencesTests: XCTestCase {
   }
 
   func testSavesAndRestoresValidDelay() {
-    DelayPreferences.saveIfValid("180", to: preferences)
-    XCTAssertEqual(DelayPreferences.load(from: preferences), "180")
+    DelayPreferences.saveIfValid("0", to: preferences)
+    XCTAssertEqual(DelayPreferences.load(from: preferences), "0")
   }
 
   func testInvalidEditDoesNotReplaceLastValidDelay() {

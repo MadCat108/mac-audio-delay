@@ -49,7 +49,7 @@ The delay, source application, and playback output are remembered between launch
 
 ## Delay limits
 
-The supported delay range is **1 to 3,600 seconds (one hour)**. The delay buffer is held in memory, so longer delays and higher output sample rates require more RAM. A one-hour stereo delay uses approximately 1.3 GiB at 48 kHz or 2.6 GiB at 96 kHz. If the buffer cannot be allocated, the app stops safely and displays an insufficient-memory message.
+The supported delay range is **0 to 3,600 seconds (one hour)**. A zero-second delay routes the selected source directly to the selected output without an intentional delay. For longer values, the delay buffer is held in memory, so longer delays and higher output sample rates require more RAM. A one-hour stereo delay uses approximately 1.3 GiB at 48 kHz or 2.6 GiB at 96 kHz. If the buffer cannot be allocated, the app stops safely and displays an insufficient-memory message.
 
 ## Updating
 

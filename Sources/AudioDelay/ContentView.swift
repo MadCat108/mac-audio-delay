@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
   @ObservedObject var model: AudioDelayModel
-  private let delayPresets = [30, 60, 90, 120, 180]
+  private let delayPresets = [0, 30, 60, 90, 120, 180]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
@@ -23,6 +23,8 @@ struct ContentView: View {
 
         Spacer()
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal)
 
       VStack(alignment: .leading, spacing: 14) {
         Label("Delay", systemImage: "timer")
@@ -53,7 +55,8 @@ struct ContentView: View {
           }
         }
       }
-      .padding(16)
+      .padding()
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
       VStack(alignment: .leading, spacing: 14) {
@@ -78,7 +81,8 @@ struct ContentView: View {
           .disabled(model.isRunning)
         }
       }
-      .padding(16)
+      .padding()
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
       VStack(alignment: .leading, spacing: 14) {
@@ -105,7 +109,8 @@ struct ContentView: View {
           .disabled(model.isRunning)
         }
       }
-      .padding(16)
+      .padding()
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
       Button {
@@ -116,7 +121,9 @@ struct ContentView: View {
         }
       } label: {
         Label(
-          model.isRunning ? "Stop Audio Delay" : "Start Audio Delay",
+          model.isRunning
+            ? (isRoutingOnly ? "Stop Audio Routing" : "Stop Audio Delay")
+            : (isRoutingOnly ? "Start Audio Routing" : "Start Audio Delay"),
           systemImage: model.isRunning ? "stop.fill" : "play.fill"
         )
         .frame(maxWidth: .infinity)
@@ -126,6 +133,7 @@ struct ContentView: View {
       .tint(model.isRunning ? .red : .accentColor)
       .keyboardShortcut(.defaultAction)
       .disabled(!model.isRunning && model.selectedOutputID == nil)
+      .padding(.horizontal)
 
       VStack(alignment: .leading, spacing: 10) {
         if isBuffering {
@@ -166,7 +174,9 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.2), value: model.runState)
       }
       .padding(12)
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
+      .padding(.horizontal)
 
       Label(
         footerText,
@@ -174,9 +184,11 @@ struct ContentView: View {
       )
       .font(.footnote)
       .foregroundStyle(.secondary)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal)
     }
+    .frame(width: 512)
     .padding(24)
-    .frame(width: 560)
     .alert(
       "Audio Delay",
       isPresented: Binding(
@@ -212,9 +224,19 @@ struct ContentView: View {
   }
 
   private var footerText: String {
+    if isRoutingOnly {
+      if let applicationName = model.selectedSourceApplicationName {
+        return "\(applicationName) is routed directly to the selected output. Other Mac audio plays normally."
+      }
+      return "All Mac audio is routed directly to the selected output. Press Stop to end routing."
+    }
     if let applicationName = model.selectedSourceApplicationName {
       return "Only \(applicationName) is delayed while Playing. Other Mac audio plays normally."
     }
     return "All Mac audio is delayed while Playing. Press Stop to return to normal playback."
+  }
+
+  private var isRoutingOnly: Bool {
+    DelayValidation.parse(model.delayText) == 0
   }
 }
