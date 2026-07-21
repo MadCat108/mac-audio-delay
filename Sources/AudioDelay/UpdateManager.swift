@@ -119,10 +119,7 @@ final class UpdateManager: ObservableObject {
       set -o pipefail
 
       echo "Starting the Audio Delay manual update..."
-      /usr/bin/curl --fail --location --silent --show-error \
-        --proto '=https' --tlsv1.2 \
-        https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh \
-        | /bin/zsh
+      curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh | zsh
       update_exit=$?
 
       echo

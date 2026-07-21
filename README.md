@@ -19,7 +19,7 @@ Browser/system audio → VB-CABLE → bundled SoX → selected physical output
 The recipient uses one command:
 
 ```bash
-/bin/zsh -c "$(curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh)"
+curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh | zsh
 ```
 
 The bootstrap script:

@@ -21,7 +21,11 @@ final class AudioDelayModel: ObservableObject {
     }
   }
 
-  @Published var delayText = "90"
+  @Published var delayText: String {
+    didSet {
+      DelayPreferences.saveIfValid(delayText, to: preferences)
+    }
+  }
   @Published var outputDevices: [AudioDevice] = []
   @Published var selectedOutputID: AudioDeviceID?
   @Published var runState: RunState = .stopped
@@ -31,6 +35,7 @@ final class AudioDelayModel: ObservableObject {
   @Published var isVBCableInstalled = false
 
   private var process: Process?
+  private let preferences: UserDefaults
   private var errorPipe: Pipe?
   private var recentError = Data()
   private var meterTextBuffer = ""
@@ -42,7 +47,9 @@ final class AudioDelayModel: ObservableObject {
 
   var isRunning: Bool { process?.isRunning == true }
 
-  init() {
+  init(preferences: UserDefaults = .standard) {
+    self.preferences = preferences
+    delayText = DelayPreferences.load(from: preferences)
     refreshDevices()
   }
 
