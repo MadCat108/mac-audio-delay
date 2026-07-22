@@ -58,6 +58,8 @@ private final class UpdaterWindowController: NSWindowController {
   private var outputPipe: Pipe?
   private var pendingOutput = ""
   private var failed = false
+  private var toolchainFailureDetected = false
+  private var toolchainVersions: [String] = []
 
   private let logURL = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Logs/Audio Delay Update.log")
@@ -135,6 +137,10 @@ private final class UpdaterWindowController: NSWindowController {
       accessibilityDescription: "Audio Delay"
     )
     iconView.imageScaling = .scaleProportionallyUpOrDown
+    iconView.wantsLayer = true
+    iconView.layer?.cornerRadius = 14
+    iconView.layer?.cornerCurve = .continuous
+    iconView.layer?.masksToBounds = true
     iconView.translatesAutoresizingMaskIntoConstraints = false
 
     let titleLabel = NSTextField(labelWithString: "Updating Audio Delay")
@@ -166,7 +172,7 @@ private final class UpdaterWindowController: NSWindowController {
     statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
     detailLabel.font = .systemFont(ofSize: 12)
     detailLabel.textColor = .secondaryLabelColor
-    detailLabel.maximumNumberOfLines = 2
+    detailLabel.maximumNumberOfLines = 7
 
     showLogButton.target = self
     showLogButton.action = #selector(showLog)
@@ -234,6 +240,24 @@ private final class UpdaterWindowController: NSWindowController {
     let lower = line.lowercased()
 
     switch true {
+    case lower.hasPrefix("audio delay build cannot proceed"):
+      toolchainFailureDetected = true
+      updateStage(
+        progress: 32,
+        status: "Audio Delay build cannot proceed",
+        detail: "Apple’s installed build tools do not match."
+      )
+    case toolchainFailureDetected && (
+      lower.hasPrefix("swift compiler:") ||
+        lower.hasPrefix("macos sdk:") ||
+        lower.hasPrefix("swift package manager:")
+    ):
+      toolchainVersions.append(line)
+      updateStage(
+        progress: 32,
+        status: "Audio Delay build cannot proceed",
+        detail: toolchainVersions.joined(separator: "\n")
+      )
     case lower.contains("audio delay update started"):
       updateStage(progress: 7, status: "Preparing update…", detail: "Connecting securely to GitHub")
     case lower.contains("downloading audio delay source"):
@@ -277,6 +301,10 @@ private final class UpdaterWindowController: NSWindowController {
     }
 
     guard status == 0 else {
+      if toolchainFailureDetected {
+        presentToolchainFailure()
+        return
+      }
       fail(
         "The update could not be completed.",
         detail: "The diagnostic log has the technical details."
@@ -291,6 +319,22 @@ private final class UpdaterWindowController: NSWindowController {
       NSWorkspace.shared.open(appURL)
       NSApp.terminate(nil)
     }
+  }
+
+  private func presentToolchainFailure() {
+    window?.setContentSize(NSSize(width: 660, height: 380))
+    window?.center()
+
+    let versionText = toolchainVersions.isEmpty
+      ? "Tool versions are available in the diagnostic log."
+      : toolchainVersions.joined(separator: "\n")
+    let detail = """
+      Apple’s Swift compiler, macOS SDK, and package manager are not a matching installation.
+      \(versionText)
+      Install every available update in System Settings, restart the Mac, then try again.
+      """
+
+    fail("Audio Delay build cannot proceed", detail: detail)
   }
 
   private func fail(_ status: String, detail: String) {

@@ -25,71 +25,35 @@ if [[ ! "$APP_VERSION" =~ '^[0-9]+(\.[0-9]+)+$' ]]; then
 fi
 
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$PROJECT_DIR/.build-cache/clang}"
+export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-$CLANG_MODULE_CACHE_PATH}"
 mkdir -p "$CLANG_MODULE_CACHE_PATH"
 
 cd "$PROJECT_DIR"
 
 DEVELOPER_PATH="${DEVELOPER_DIR:-$(xcode-select -p)}"
-SDK_PATH="$(DEVELOPER_DIR="$DEVELOPER_PATH" xcrun --sdk macosx --show-sdk-path)"
-SWIFT_COMPILER="$(DEVELOPER_DIR="$DEVELOPER_PATH" xcrun --find swiftc)"
-CLANG_COMPILER="$(DEVELOPER_DIR="$DEVELOPER_PATH" xcrun --find clang++)"
+"$SCRIPT_DIR/check-toolchain.sh"
+
+SWIFT_DRIVER="$(DEVELOPER_DIR="$DEVELOPER_PATH" xcrun --find swift)"
+SWIFT_ENV=(
+  "DEVELOPER_DIR=$DEVELOPER_PATH"
+  "CLANG_MODULE_CACHE_PATH=$CLANG_MODULE_CACHE_PATH"
+  "SWIFTPM_MODULECACHE_OVERRIDE=$SWIFTPM_MODULECACHE_OVERRIDE"
+)
 
 # Some internal Xcode installations keep the SDK-matching macOS compiler in a
 # separate OSX*.xctoolchain while SwiftPM remains in the default toolchain.
 matching_compilers=("$DEVELOPER_PATH"/Toolchains/OSX*.xctoolchain/usr/bin/swiftc(N))
 if (( ${#matching_compilers} > 0 )); then
-  SWIFT_COMPILER="${matching_compilers[-1]}"
+  SWIFT_ENV+=("SWIFT_EXEC=${matching_compilers[-1]}")
 fi
 
-# Compile directly instead of invoking Swift Package Manager. Some otherwise
-# usable Command Line Tools installations contain a mismatched PackageDescription
-# library, which prevents SwiftPM from reading Package.swift even though swiftc
-# and clang can build the application correctly.
-BIN_DIR="$PROJECT_DIR/.build-app-direct"
-rm -rf "$BIN_DIR"
-mkdir -p "$BIN_DIR"
-
-TARGET="$(uname -m)-apple-macos14.2"
-CORE_INCLUDE_DIR="$PROJECT_DIR/Sources/AudioDelayCore/include"
-CORE_OBJECT="$BIN_DIR/AudioDelayCore.o"
-
-echo "Building for production..."
-
-"$CLANG_COMPILER" \
-  -std=c++17 \
-  -O \
-  -mmacosx-version-min=14.2 \
-  -isysroot "$SDK_PATH" \
-  -I "$CORE_INCLUDE_DIR" \
-  -c "$PROJECT_DIR/Sources/AudioDelayCore/AudioDelayCore.cpp" \
-  -o "$CORE_OBJECT"
-
-"$SWIFT_COMPILER" \
-  -O \
-  -whole-module-optimization \
-  -parse-as-library \
-  -sdk "$SDK_PATH" \
-  -target "$TARGET" \
-  -module-cache-path "$CLANG_MODULE_CACHE_PATH" \
-  -I "$CORE_INCLUDE_DIR" \
-  "$PROJECT_DIR"/Sources/AudioDelay/*.swift \
-  "$CORE_OBJECT" \
-  -lc++ \
-  -framework CoreAudio \
-  -o "$BIN_DIR/AudioDelay"
-
-echo "Build of product 'AudioDelay' complete!"
-
-"$SWIFT_COMPILER" \
-  -O \
-  -parse-as-library \
-  -sdk "$SDK_PATH" \
-  -target "$TARGET" \
-  -module-cache-path "$CLANG_MODULE_CACHE_PATH" \
-  "$PROJECT_DIR/Sources/AudioDelayUpdater/main.swift" \
-  -o "$BIN_DIR/AudioDelayUpdater"
-
-echo "Build of product 'AudioDelayUpdater' complete!"
+SCRATCH_PATH="$PROJECT_DIR/.build-app"
+env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
+  --scratch-path "$SCRATCH_PATH" --product AudioDelay
+env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
+  --scratch-path "$SCRATCH_PATH" --product AudioDelayUpdater
+BIN_DIR="$(env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
+  --scratch-path "$SCRATCH_PATH" --show-bin-path)"
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"

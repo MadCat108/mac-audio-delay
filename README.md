@@ -27,8 +27,9 @@ The bootstrap script:
 
 1. Downloads this repository's source over HTTPS.
 2. Requests Apple's Command Line Tools through the normal macOS installer if they are missing.
-3. Builds the Swift app and native Core Audio engine locally with Apple's compilers.
-4. Ad-hoc signs the locally built app and installs it into `~/Applications`.
+3. Verifies that Apple's compiler and macOS SDK are a matching installation.
+4. Builds the Swift app and native Core Audio engine locally.
+5. Ad-hoc signs the locally built app and installs it into `~/Applications`.
 
 The recipient does not need Xcode, Homebrew, an Apple Developer account, an audio driver, or administrator access. Apple's smaller Command Line Tools package is sufficient.
 
@@ -61,9 +62,7 @@ The current release version is stored in `VERSION`. Existing installations can a
 
 ## Local or maintainer build
 
-The local app build requires Xcode or matching Apple Command Line Tools. It
-invokes Apple's Swift and C++ compilers directly, so the recipient installer
-does not depend on Swift Package Manager:
+The local app build requires Xcode or matching Apple Command Line Tools:
 
 ```bash
 ./scripts/build-app.sh
@@ -84,6 +83,18 @@ swift test
 ```
 
 For a short live test, choose a five-second delay in the app. Start with disposable browser audio before using an important stream. Confirm the exact secure stream works before removing an already-installed virtual audio driver, because some DRM-protected sources may refuse system-audio capture.
+
+## Apple Command Line Tools repair
+
+Audio Delay checks that Apple's Swift compiler can load Foundation
+from the installed macOS SDK before beginning the full build. If the check says
+the tools contain mixed versions, first install every available update in
+**System Settings → General → Software Update**, restart the Mac, and run the
+installer again. The mismatch affects only the developer tools under
+`/Library/Developer/CommandLineTools`; it does not mean macOS itself is damaged.
+The installer and foreground updater show the detected Swift compiler, macOS
+SDK, and Swift Package Manager versions so it is clear why the build cannot
+proceed. The complete compiler diagnostic is also retained in the update log.
 
 ## Security model
 

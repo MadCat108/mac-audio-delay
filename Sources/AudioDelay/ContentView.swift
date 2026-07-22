@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
   @ObservedObject var model: AudioDelayModel
-  private let delayPresets = [0, 30, 60, 90, 120, 180]
+  private let delayPresets = [0, 15, 30, 60, 90, 120, 180]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
@@ -60,7 +60,7 @@ struct ContentView: View {
       .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
 
       VStack(alignment: .leading, spacing: 14) {
-        Label("Delay audio from", systemImage: "app.badge.waveform")
+        Label("Delay audio from", systemImage: "waveform")
           .font(.headline)
 
         HStack(spacing: 10) {
@@ -187,8 +187,9 @@ struct ContentView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal)
     }
-    .frame(width: 512)
-    .padding(24)
+    .frame(width: 528)
+    .padding(.horizontal)
+    .padding(.vertical, 24)
     .alert(
       "Audio Delay",
       isPresented: Binding(

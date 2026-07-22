@@ -46,25 +46,48 @@ fi
 
 stop_running_app
 
-if ! xcrun --find swiftc >/dev/null 2>&1 || ! xcrun --find clang++ >/dev/null 2>&1; then
+toolchain_commands_exist() {
+  xcrun --find swift >/dev/null 2>&1 && \
+    xcrun --find swiftc >/dev/null 2>&1 && \
+    xcrun --find clang++ >/dev/null 2>&1
+}
+
+toolchain_is_healthy() {
+  "$SCRIPT_DIR/scripts/check-toolchain.sh" --quiet
+}
+
+if ! toolchain_commands_exist; then
   echo "Apple Command Line Tools are required to build Audio Delay."
   echo "macOS will now open Apple's installer."
   xcode-select --install >/dev/null 2>&1 || true
 
   echo "Waiting for Apple Command Line Tools to finish installing..."
   for _ in {1..360}; do
-    if xcrun --find swiftc >/dev/null 2>&1 && xcrun --find clang++ >/dev/null 2>&1; then
+    if toolchain_commands_exist; then
       break
     fi
     sleep 5
   done
 
-  if ! xcrun --find swiftc >/dev/null 2>&1 || ! xcrun --find clang++ >/dev/null 2>&1; then
+  if ! toolchain_commands_exist; then
     echo "Apple Command Line Tools did not finish installing." >&2
     echo "Run this setup again after their installation completes." >&2
     exit 1
   fi
+
+  # The compiler executables can become visible shortly before the SDK has
+  # finished settling on disk. Give Apple's installer a short grace period so
+  # we do not start the real build against a temporarily incomplete SDK.
+  echo "Verifying the newly installed compiler and macOS SDK..."
+  for _ in {1..12}; do
+    if toolchain_is_healthy; then
+      break
+    fi
+    sleep 5
+  done
 fi
+
+"$SCRIPT_DIR/scripts/check-toolchain.sh"
 
 echo "Building Audio Delay locally on this Mac..."
 "$SCRIPT_DIR/scripts/build-app.sh"

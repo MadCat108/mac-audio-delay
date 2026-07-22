@@ -15,6 +15,7 @@ struct UpdateAvailableView: View {
           .resizable()
           .scaledToFit()
           .frame(width: 58, height: 58)
+          .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
           .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 4) {
