@@ -1,6 +1,6 @@
 # Audio Delay for macOS
 
-A small native macOS app that plays system audio through speakers or headphones after a configurable fixed delay. It is designed for secure browser streams that cannot be opened directly by VLC or another player.
+A native macOS app that plays system audio through speakers or headphones after a configurable fixed delay. 
 
 The signal path is entirely native:
 
