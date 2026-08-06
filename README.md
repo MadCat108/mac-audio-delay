@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/boot
 
 The installer downloads the public source, requests Apple's Command Line Tools if they are missing, builds the app locally, and installs it in `~/Applications`. It does not require Xcode, Homebrew, or a virtual audio driver.
 
-On first playback, choose **Allow** when macOS requests Screen & System Audio Recording permission. If permission was previously denied, enable Audio Delay under **System Settings → Privacy & Security → Screen & System Audio Recording**.
+On first playback, choose **Allow** when macOS requests System Audio Recording permission. Audio Delay requests audio-only access—not screen, microphone, or camera access. If no source audio reaches the app, it shows a warning with a shortcut to the correct Privacy Settings page. Enable Audio Delay under **System Audio Recording Only**, then press Start again.
 
 ## Use
 
@@ -38,7 +38,7 @@ The buffer is held in memory. A one-hour stereo delay uses approximately 1.3 GiB
 
 Choose **Audio Delay → Check for Updates…**. The foreground updater downloads the latest public source, shows detailed live progress, rebuilds locally, installs the update, and reopens the app.
 
-Audio Delay also checks quietly on startup when it has not completed a successful check within the previous 24 hours. It prompts only when a newer version is available. Running the installation command again also upgrades an existing installation.
+Audio Delay also checks quietly on every startup. It prompts only when a newer version is available; connection failures remain silent. Running the installation command again also upgrades an existing installation.
 
 ## Repairing Apple Command Line Tools
 

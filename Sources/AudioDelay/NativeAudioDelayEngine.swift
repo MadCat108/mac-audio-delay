@@ -4,6 +4,7 @@ import Foundation
 
 enum NativeAudioDelayError: LocalizedError {
   case unsupportedSystem
+  case audioCapturePermissionDenied
   case coreAudio(OSStatus, String)
   case processUnavailable
   case unsupportedFormat
@@ -13,6 +14,8 @@ enum NativeAudioDelayError: LocalizedError {
     switch self {
     case .unsupportedSystem:
       return "Audio Delay requires macOS 14.2 or newer for native system-audio capture."
+    case .audioCapturePermissionDenied:
+      return "System Audio Recording permission is required to route or delay Mac audio."
     case .coreAudio(let status, let action):
       return "Core Audio could not \(action) (error \(Self.describe(status)))."
     case .processUnavailable:
@@ -32,6 +35,10 @@ enum NativeAudioDelayError: LocalizedError {
     }
     let fourCC = String(characters)
     return fourCC == "????" ? String(status) : "\(fourCC), \(status)"
+  }
+
+  static func isAudioCapturePermissionError(_ status: OSStatus) -> Bool {
+    status == kAudioDevicePermissionsError
   }
 }
 
@@ -77,10 +84,10 @@ final class NativeAudioDelayEngine {
       }
       self.tapDescription = tapDescription
 
-      try Self.check(
-        AudioHardwareCreateProcessTap(tapDescription, &tapID),
-        "create the system-audio tap"
-      )
+      // The Core Audio tap requests only System Audio Recording access when
+      // capture starts. Do not call the broader screen-capture permission API.
+      let tapStatus = AudioHardwareCreateProcessTap(tapDescription, &tapID)
+      try Self.check(tapStatus, "create the system-audio tap")
 
       if selectedBundleIdentifier != nil {
         try registerProcessListListener()
@@ -134,6 +141,19 @@ final class NativeAudioDelayEngine {
     var left: Float = 0
     var right: Float = 0
     ADDelayProcessorGetPeaks(processor, &left, &right)
+    return StereoPeak(
+      left: Self.meterLevel(left),
+      right: Self.meterLevel(right),
+      leftClipping: left >= 0.999,
+      rightClipping: right >= 0.999
+    )
+  }
+
+  func inputPeakLevels() -> StereoPeak {
+    guard let processor else { return .zero }
+    var left: Float = 0
+    var right: Float = 0
+    ADDelayProcessorGetInputPeaks(processor, &left, &right)
     return StereoPeak(
       left: Self.meterLevel(left),
       right: Self.meterLevel(right),
@@ -401,6 +421,9 @@ final class NativeAudioDelayEngine {
 
   private static func check(_ status: OSStatus, _ action: String) throws {
     guard status == noErr else {
+      if NativeAudioDelayError.isAudioCapturePermissionError(status) {
+        throw NativeAudioDelayError.audioCapturePermissionDenied
+      }
       throw NativeAudioDelayError.coreAudio(status, action)
     }
   }

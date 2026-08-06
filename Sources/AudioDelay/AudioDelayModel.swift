@@ -56,7 +56,10 @@ final class AudioDelayModel: ObservableObject {
   @Published var runState: RunState = .stopped
   @Published private(set) var bufferProgress = 0.0
   @Published private(set) var peakLevels = StereoPeak.zero
+  @Published private(set) var inputPeakLevels = StereoPeak.zero
+  @Published private(set) var noAudioDetected = false
   @Published var errorMessage: String?
+  @Published var needsAudioCapturePermission = false
 
   private var engine: NativeAudioDelayEngine?
   private let preferences: UserDefaults
@@ -64,6 +67,7 @@ final class AudioDelayModel: ObservableObject {
   private var meterTimer: Timer?
   private var countdownDeadline: Date?
   private var countdownDuration = 0.0
+  private var inputActivityMonitor = AudioInputActivityMonitor()
 
   var isRunning: Bool { engine != nil }
 
@@ -117,6 +121,7 @@ final class AudioDelayModel: ObservableObject {
 
   func start() {
     guard !isRunning else { return }
+    needsAudioCapturePermission = false
     guard let seconds = DelayValidation.parse(delayText) else {
       errorMessage = "Enter a delay between 0 and 3600 seconds."
       return
@@ -138,6 +143,8 @@ final class AudioDelayModel: ObservableObject {
     countdownDuration = 0
     bufferProgress = 0
     peakLevels = .zero
+    inputPeakLevels = .zero
+    noAudioDetected = false
     engine?.stop()
     engine = nil
     runState = .stopped
@@ -152,17 +159,30 @@ final class AudioDelayModel: ObservableObject {
       try engine.start(delay: seconds, output: output, source: selectedSource)
       self.engine = engine
       peakLevels = .zero
+      inputPeakLevels = .zero
+      noAudioDetected = false
+      inputActivityMonitor = AudioInputActivityMonitor()
       meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
         Task { @MainActor in
           guard let self, let engine = self.engine else { return }
           self.peakLevels = engine.peakLevels()
+          self.inputPeakLevels = engine.inputPeakLevels()
+          self.noAudioDetected = self.inputActivityMonitor.update(
+            peak: self.inputPeakLevels
+          )
         }
       }
       beginCountdown(seconds: seconds)
     } catch {
       engine?.stop()
       engine = nil
-      errorMessage = error.localizedDescription
+      if let nativeError = error as? NativeAudioDelayError,
+        case .audioCapturePermissionDenied = nativeError
+      {
+        needsAudioCapturePermission = true
+      } else {
+        errorMessage = error.localizedDescription
+      }
       runState = .stopped
     }
   }

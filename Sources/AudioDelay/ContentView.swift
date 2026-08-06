@@ -162,17 +162,37 @@ struct ContentView: View {
           Image(systemName: statusSymbol)
             .foregroundStyle(statusColor)
             .frame(width: 14)
-          Text(model.runState.label)
+          Text(statusLabel)
             .fontWeight(.medium)
             .contentTransition(.numericText())
           Spacer()
-          if case .running = model.runState {
-            StereoPeakMeter(peak: model.peakLevels)
+          if model.isRunning {
+            StereoPeakMeter(peak: meterPeak)
               .transition(.opacity.combined(with: .move(edge: .trailing)))
           }
         }
         .animation(.easeOut(duration: 0.2), value: model.runState)
+
+        if model.noAudioDetected {
+          Divider()
+
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.yellow)
+            Text("No source audio detected. Start audio in the selected source, or check System Audio Recording permission.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button("Privacy Settings") {
+              AudioCapturePermissionSettings.open()
+            }
+            .controlSize(.small)
+          }
+          .transition(.opacity.combined(with: .move(edge: .top)))
+        }
       }
+      .animation(.easeOut(duration: 0.2), value: model.noAudioDetected)
       .padding(12)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
@@ -201,6 +221,19 @@ struct ContentView: View {
     } message: {
       Text(model.errorMessage ?? "")
     }
+    .alert(
+      "System Audio Permission Needed",
+      isPresented: $model.needsAudioCapturePermission
+    ) {
+      Button("Open Privacy Settings") {
+        AudioCapturePermissionSettings.open()
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(
+        "Audio Delay only needs access to system audio. It does not request screen or microphone access. Enable Audio Delay under System Audio Recording Only, then press Start again."
+      )
+    }
   }
 
   private var isBuffering: Bool {
@@ -208,7 +241,12 @@ struct ContentView: View {
     return false
   }
 
+  private var meterPeak: StereoPeak {
+    isBuffering ? model.inputPeakLevels : model.peakLevels
+  }
+
   private var statusSymbol: String {
+    if model.noAudioDetected { return "exclamationmark.triangle.fill" }
     switch model.runState {
     case .stopped: return "checkmark.circle.fill"
     case .waiting: return "hourglass"
@@ -216,7 +254,12 @@ struct ContentView: View {
     }
   }
 
+  private var statusLabel: String {
+    model.noAudioDetected ? "No Audio Detected" : model.runState.label
+  }
+
   private var statusColor: Color {
+    if model.noAudioDetected { return .yellow }
     switch model.runState {
     case .stopped: return .secondary
     case .waiting: return .blue

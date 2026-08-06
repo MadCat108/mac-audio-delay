@@ -24,12 +24,18 @@ private final class UpdaterApplicationDelegate: NSObject, NSApplicationDelegate 
 
     let scriptURL = URL(fileURLWithPath: CommandLine.arguments[1])
     let iconPath = CommandLine.arguments.count >= 3 ? CommandLine.arguments[2] : ""
+    let currentVersion = CommandLine.arguments.count >= 4 ? CommandLine.arguments[3] : "Unknown"
+    let availableVersion = CommandLine.arguments.count >= 5 ? CommandLine.arguments[4] : "Latest"
     let icon = NSImage(contentsOfFile: iconPath) ?? NSApp.applicationIconImage
     if let icon {
       NSApp.applicationIconImage = icon
     }
 
-    let controller = UpdaterWindowController(icon: icon)
+    let controller = UpdaterWindowController(
+      icon: icon,
+      currentVersion: currentVersion,
+      availableVersion: availableVersion
+    )
     windowController = controller
     controller.showWindow(nil)
     NSApp.activate(ignoringOtherApps: true)
@@ -68,7 +74,7 @@ private final class UpdaterWindowController: NSWindowController {
   private let logURL = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Logs/Audio Delay Update.log")
 
-  init(icon: NSImage?) {
+  init(icon: NSImage?, currentVersion: String, availableVersion: String) {
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 540, height: 286),
       styleMask: [.titled, .miniaturizable],
@@ -81,7 +87,11 @@ private final class UpdaterWindowController: NSWindowController {
     window.center()
 
     super.init(window: window)
-    buildInterface(icon: icon)
+    buildInterface(
+      icon: icon,
+      currentVersion: currentVersion,
+      availableVersion: availableVersion
+    )
   }
 
   required init?(coder: NSCoder) {
@@ -147,7 +157,11 @@ private final class UpdaterWindowController: NSWindowController {
     }
   }
 
-  private func buildInterface(icon: NSImage?) {
+  private func buildInterface(
+    icon: NSImage?,
+    currentVersion: String,
+    availableVersion: String
+  ) {
     guard let contentView = window?.contentView else { return }
 
     let background = NSVisualEffectView()
@@ -178,10 +192,16 @@ private final class UpdaterWindowController: NSWindowController {
     subtitleLabel.font = .systemFont(ofSize: 13)
     subtitleLabel.textColor = .secondaryLabelColor
 
-    let headingStack = NSStackView(views: [titleLabel, subtitleLabel])
+    let versionLabel = NSTextField(labelWithAttributedString: Self.versionTransitionText(
+      current: currentVersion,
+      available: availableVersion
+    ))
+
+    let headingStack = NSStackView(views: [titleLabel, subtitleLabel, versionLabel])
     headingStack.orientation = .vertical
     headingStack.alignment = .leading
     headingStack.spacing = 5
+    headingStack.setCustomSpacing(9, after: subtitleLabel)
 
     let header = NSStackView(views: [iconView, headingStack])
     header.orientation = .horizontal
@@ -249,6 +269,41 @@ private final class UpdaterWindowController: NSWindowController {
       stack.topAnchor.constraint(equalTo: background.topAnchor, constant: 28),
       stack.bottomAnchor.constraint(lessThanOrEqualTo: background.bottomAnchor, constant: -24),
     ])
+  }
+
+  private static func versionTransitionText(
+    current: String,
+    available: String
+  ) -> NSAttributedString {
+    let result = NSMutableAttributedString(
+      string: "Updating from ",
+      attributes: [
+        .font: NSFont.systemFont(ofSize: 13),
+        .foregroundColor: NSColor.secondaryLabelColor,
+      ]
+    )
+    result.append(NSAttributedString(
+      string: current,
+      attributes: [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .medium),
+        .foregroundColor: NSColor.labelColor,
+      ]
+    ))
+    result.append(NSAttributedString(
+      string: "  →  ",
+      attributes: [
+        .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+        .foregroundColor: NSColor.tertiaryLabelColor,
+      ]
+    ))
+    result.append(NSAttributedString(
+      string: available,
+      attributes: [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),
+        .foregroundColor: NSColor.controlAccentColor,
+      ]
+    ))
+    return result
   }
 
   private func consume(_ data: Data) {

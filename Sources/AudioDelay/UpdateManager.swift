@@ -12,8 +12,6 @@ final class UpdateManager: ObservableObject {
   @Published private(set) var isChecking = false
   @Published private(set) var inlineCheckResult: InlineCheckResult?
 
-  private let automaticCheckInterval: TimeInterval = 24 * 60 * 60
-  private let lastCheckKey = "LastSuccessfulUpdateCheck"
   private let versionURL = URL(
     string: "https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/VERSION"
   )!
@@ -25,12 +23,6 @@ final class UpdateManager: ObservableObject {
 
   func checkForUpdates(interactive: Bool = true, reportsResultInline: Bool = false) {
     guard !isChecking else { return }
-    if !interactive,
-      let lastCheck = UserDefaults.standard.object(forKey: lastCheckKey) as? Date,
-      Date().timeIntervalSince(lastCheck) < automaticCheckInterval
-    {
-      return
-    }
     if reportsResultInline {
       inlineCheckResult = nil
     }
@@ -45,8 +37,6 @@ final class UpdateManager: ObservableObject {
         guard let current = AppVersion(currentVersionText) else {
           throw UpdateError.invalidInstalledVersion
         }
-        UserDefaults.standard.set(Date(), forKey: lastCheckKey)
-
         if current < latest {
           presentAvailableUpdate(latest.description)
         } else if interactive {
@@ -97,7 +87,7 @@ final class UpdateManager: ObservableObject {
       availableVersion: version,
       update: { [weak self] in
         self?.dismissUpdateWindow()
-        self?.launchUpdater()
+        self?.launchUpdater(availableVersion: version)
       },
       postpone: { [weak self] in
         self?.dismissUpdateWindow()
@@ -201,7 +191,7 @@ final class UpdateManager: ObservableObject {
     alert.runModal()
   }
 
-  private func launchUpdater() {
+  private func launchUpdater(availableVersion: String) {
     do {
       guard let bundledScript = Bundle.main.url(forResource: "update", withExtension: "sh") else {
         throw UpdateError.missingUpdater
@@ -234,6 +224,8 @@ final class UpdateManager: ObservableObject {
       configuration.arguments = [
         temporaryScript.path,
         temporaryUpdater.appendingPathComponent("Contents/Resources/AppIcon.icns").path,
+        currentVersionText,
+        availableVersion,
       ]
       NSWorkspace.shared.openApplication(
         at: temporaryUpdater,

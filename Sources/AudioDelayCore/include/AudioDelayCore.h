@@ -25,6 +25,12 @@ void ADDelayProcessorGetPeaks(
     float *right
 );
 
+void ADDelayProcessorGetInputPeaks(
+    const ADDelayProcessor *processor,
+    float *left,
+    float *right
+);
+
 #ifdef __cplusplus
 }
 #endif

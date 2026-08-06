@@ -23,6 +23,8 @@ struct ADDelayProcessor {
     uint64_t position = 0;
     AudioObjectID deviceID = kAudioObjectUnknown;
     AudioDeviceIOProcID ioProcID = nullptr;
+    std::atomic<float> leftInputPeak{0};
+    std::atomic<float> rightInputPeak{0};
     std::atomic<float> leftPeak{0};
     std::atomic<float> rightPeak{0};
 };
@@ -129,6 +131,8 @@ static OSStatus delayIOProc(
 
     clearOutput(output);
     const UInt32 frames = frameCount(output->mBuffers[0]);
+    float leftInputPeak = 0;
+    float rightInputPeak = 0;
     float leftPeak = 0;
     float rightPeak = 0;
 
@@ -136,6 +140,8 @@ static OSStatus delayIOProc(
         float inputLeft = 0;
         float inputRight = 0;
         readStereoFrame(input, frame, inputLeft, inputRight);
+        leftInputPeak = std::max(leftInputPeak, std::abs(inputLeft));
+        rightInputPeak = std::max(rightInputPeak, std::abs(inputRight));
 
         float outputLeft = inputLeft;
         float outputRight = inputRight;
@@ -152,6 +158,8 @@ static OSStatus delayIOProc(
         rightPeak = std::max(rightPeak, std::abs(outputRight));
     }
 
+    processor->leftInputPeak.store(leftInputPeak, std::memory_order_relaxed);
+    processor->rightInputPeak.store(rightInputPeak, std::memory_order_relaxed);
     processor->leftPeak.store(leftPeak, std::memory_order_relaxed);
     processor->rightPeak.store(rightPeak, std::memory_order_relaxed);
     return noErr;
@@ -211,6 +219,8 @@ void ADDelayProcessorStop(ADDelayProcessor *processor) {
     AudioDeviceDestroyIOProcID(processor->deviceID, processor->ioProcID);
     processor->ioProcID = nullptr;
     processor->deviceID = kAudioObjectUnknown;
+    processor->leftInputPeak.store(0, std::memory_order_relaxed);
+    processor->rightInputPeak.store(0, std::memory_order_relaxed);
     processor->leftPeak.store(0, std::memory_order_relaxed);
     processor->rightPeak.store(0, std::memory_order_relaxed);
 }
@@ -225,5 +235,18 @@ void ADDelayProcessorGetPeaks(
     }
     if (right != nullptr) {
         *right = processor == nullptr ? 0 : processor->rightPeak.load(std::memory_order_relaxed);
+    }
+}
+
+void ADDelayProcessorGetInputPeaks(
+    const ADDelayProcessor *processor,
+    float *left,
+    float *right
+) {
+    if (left != nullptr) {
+        *left = processor == nullptr ? 0 : processor->leftInputPeak.load(std::memory_order_relaxed);
+    }
+    if (right != nullptr) {
+        *right = processor == nullptr ? 0 : processor->rightInputPeak.load(std::memory_order_relaxed);
     }
 }
