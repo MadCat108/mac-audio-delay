@@ -31,6 +31,7 @@ mkdir -p "$CLANG_MODULE_CACHE_PATH"
 
 cd "$PROJECT_DIR"
 
+echo "Audio Delay stage: Preparing build"
 DEVELOPER_PATH="${DEVELOPER_DIR:-$(xcode-select -p)}"
 "$SCRIPT_DIR/check-toolchain.sh"
 
@@ -49,13 +50,18 @@ if (( ${#matching_compilers} > 0 )); then
 fi
 
 SCRATCH_PATH="$PROJECT_DIR/.build-app"
+echo "Audio Delay stage: Compiling application"
 env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
   --scratch-path "$SCRATCH_PATH" --product AudioDelay
+echo "Audio Delay stage: Application compiled"
+echo "Audio Delay stage: Compiling updater"
 env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
   --scratch-path "$SCRATCH_PATH" --product AudioDelayUpdater
+echo "Audio Delay stage: Updater compiled"
 BIN_DIR="$(env $SWIFT_ENV "$SWIFT_DRIVER" build -c release --disable-sandbox \
   --scratch-path "$SCRATCH_PATH" --show-bin-path)"
 
+echo "Audio Delay stage: Packaging application"
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/AudioDelay" "$MACOS_DIR/AudioDelay"
@@ -87,6 +93,7 @@ cp "$ICON_SOURCE" "$UPDATER_RESOURCES_DIR/AppIcon.icns"
   -c "Set :CFBundleShortVersionString $APP_VERSION" \
   "$UPDATER_CONTENTS_DIR/Info.plist"
 chmod 755 "$UPDATER_MACOS_DIR/AudioDelayUpdater"
+echo "Audio Delay stage: Signing application"
 codesign --force --deep --sign - "$UPDATER_APP_DIR"
 if [[ ! -f "$UPDATE_SCRIPT_SOURCE" ]]; then
   echo "Update helper is missing: $UPDATE_SCRIPT_SOURCE" >&2
@@ -96,6 +103,7 @@ cp "$UPDATE_SCRIPT_SOURCE" "$RESOURCES_DIR/update.sh"
 chmod 755 "$RESOURCES_DIR/update.sh"
 
 codesign --force --deep --sign - "$APP_DIR"
+echo "Audio Delay stage: Verifying application"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 
 echo

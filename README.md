@@ -2,128 +2,78 @@
 
 A native macOS app that plays system audio through speakers or headphones after a configurable fixed delay.
 
-The signal path is entirely native:
+## Install
 
-```text
-Selected app or all system audio → private Core Audio tap → delay buffer → selected output
-```
-
-Audio Delay does not require Homebrew, an audio driver, an administrator password, or a restart.
-
-## Supported Macs
-
-- macOS 14.2 Sonoma or newer
-- Apple Silicon
-
-## Recipient installation
-
-The recipient uses one command:
+Requires an **Apple Silicon Mac running macOS 14.2 or newer**. Paste this command into Terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh | zsh
 ```
 
-The bootstrap script:
+The installer downloads the public source, requests Apple's Command Line Tools if they are missing, builds the app locally, and installs it in `~/Applications`. It does not require Xcode, Homebrew, or a virtual audio driver.
 
-1. Downloads this repository's source over HTTPS.
-2. Requests Apple's Command Line Tools through the normal macOS installer if they are missing.
-3. Verifies that Apple's compiler and macOS SDK are a matching installation.
-4. Offers a guided repair in Terminal if the standalone Command Line Tools are broken.
-5. Builds the Swift app and native Core Audio engine locally.
-6. Ad-hoc signs the locally built app and installs it into `~/Applications`.
+On first playback, choose **Allow** when macOS requests Screen & System Audio Recording permission. If permission was previously denied, enable Audio Delay under **System Settings → Privacy & Security → Screen & System Audio Recording**.
 
-The recipient does not need Xcode, Homebrew, an Apple Developer account, or an
-audio driver. Apple's smaller Command Line Tools package is sufficient. A
-normal installation does not require administrator access; repairing an
-existing broken Command Line Tools installation does.
-
-On first playback, macOS displays its normal system-audio recording permission popup. Choose **Allow**. macOS remembers the choice. If access is denied, it must be re-enabled manually under **System Settings → Privacy & Security → Screen & System Audio Recording**.
-
-## Everyday use
+## Use
 
 1. Open **Audio Delay**.
-2. Enter the delay in seconds.
-3. Choose **All Mac Audio** or select one currently running application.
-4. Select speakers, headphones, or another output.
+2. Enter a delay from 0 to 3,600 seconds.
+3. Choose **All Mac Audio** or one running application.
+4. Choose the playback device.
 5. Press **Start**.
-6. Approve the system-audio permission popup on first use.
 
-The app captures audio using an Apple Core Audio process tap. In all-audio mode, every application except Audio Delay is captured. In selected-app mode, only the chosen application's processes are captured; other Mac audio continues normally. The immediate copy of captured audio is muted while the tap is active, and the delayed output is excluded from capture to prevent feedback. The system's selected output does not change.
+All-audio mode captures every application except Audio Delay. Selected-app mode delays only that application while other Mac audio plays normally. The app never changes the system's default output device.
 
-The delay, source application, and playback output are remembered between launches. If the saved application is no longer running, Audio Delay silently returns to **All Mac Audio**. If the saved output is unavailable, it uses the current macOS default output.
+The delay, source, and output are remembered. If a saved application is no longer running, the app returns to **All Mac Audio**. If a saved output is unavailable, it uses the current macOS default output.
+
+Closing the window quits when audio is stopped. If delay or routing is active, Audio Delay asks for confirmation before stopping playback and restoring normal undelayed audio.
 
 ## Delay limits
 
-The supported delay range is **0 to 3,600 seconds (one hour)**. A zero-second delay routes the selected source directly to the selected output without an intentional delay. For longer values, the delay buffer is held in memory, so longer delays and higher output sample rates require more RAM. A one-hour stereo delay uses approximately 1.3 GiB at 48 kHz or 2.6 GiB at 96 kHz. If the buffer cannot be allocated, the app stops safely and displays an insufficient-memory message.
+The supported range is **0 to 3,600 seconds (one hour)**. Zero seconds provides direct routing without an intentional delay.
+
+The buffer is held in memory. A one-hour stereo delay uses approximately 1.3 GiB at 48 kHz or 2.6 GiB at 96 kHz. If memory allocation fails, the app stops safely and reports the problem.
 
 ## Updating
 
-Choose **Audio Delay → Check for Updates…** for an immediate manual check. When an update is available, the app opens a foreground updater with live status and progress, then closes. The updater downloads the latest public source, rebuilds the app locally, replaces the previous copy, and reopens it automatically.
+Choose **Audio Delay → Check for Updates…**. The foreground updater downloads the latest public source, shows detailed live progress, rebuilds locally, installs the update, and reopens the app.
 
-Audio Delay also performs a quiet update check on startup when it has not checked successfully within the previous 24 hours. It prompts only when a newer version is available; up-to-date results and temporary network failures remain silent.
+Audio Delay also checks quietly on startup when it has not completed a successful check within the previous 24 hours. It prompts only when a newer version is available. Running the installation command again also upgrades an existing installation.
 
-The current release version is stored in `VERSION`. Existing installations can also upgrade by running the installation command again.
+## Repairing Apple Command Line Tools
 
-## Local or maintainer build
-
-The local app build requires Xcode or matching Apple Command Line Tools:
-
-```bash
-./scripts/build-app.sh
-```
-
-The application appears at:
-
-```text
-build/Audio Delay.app
-```
-
-GitHub Actions repeats the unit tests and full local app build on an Apple Silicon runner. It does not publish a prebuilt app; recipients build from source to avoid downloaded-app Gatekeeper and notarization requirements.
-
-## Local testing
-
-```bash
-swift test
-```
-
-For a short live test, choose a five-second delay in the app. Start with disposable browser audio before using an important stream. Confirm the exact secure stream works before removing an already-installed virtual audio driver, because some DRM-protected sources may refuse system-audio capture.
-
-## Apple Command Line Tools repair
-
-Audio Delay checks that Apple's Swift compiler can load Foundation from the
-installed macOS SDK before beginning the full build. If the standalone tools
-are incomplete or contain mixed versions, the Terminal installer explains the
-repair and asks permission before running:
+If Apple’s compiler and macOS SDK are incomplete or contain mixed versions, the installer offers a guided repair. After confirmation, it runs:
 
 ```bash
 sudo rm -rf /Library/Developer/CommandLineTools
 xcode-select --install
 ```
 
-The administrator password is requested directly by `sudo`; Audio Delay does
-not read or store it. After Apple’s installer finishes, Audio Delay verifies the
-new tools and continues the installation automatically. A restart is not
-normally required. The repair removes only Apple's developer tools under
-`/Library/Developer/CommandLineTools`; it does not remove user files or indicate
-that macOS itself is damaged. The installer and foreground updater show the
-macOS version and build, machine architecture, Swift compiler, macOS SDK, and
-Swift Package Manager versions so it is clear why the build cannot proceed.
-The complete compiler diagnostic is also retained in the update log.
+`sudo` requests the administrator password directly; Audio Delay never reads or stores it. Apple's official installer then opens. Audio Delay waits, verifies the new tools, and continues automatically. A restart is not normally required.
 
-## Security model
+The repair is offered only for recognized Apple toolchain failures and only when the selected developer directory is exactly `/Library/Developer/CommandLineTools`. It never removes a full Xcode installation.
 
+## Development and security
+
+Build and test locally:
+
+```bash
+./scripts/build-app.sh
+swift test
+```
+
+The built app appears at `build/Audio Delay.app`. GitHub Actions repeats the tests and full Apple Silicon build, but does not publish a prebuilt app.
+
+- All executable code is compiled locally from this public repository.
 - The app installs only in the current user's `~/Applications` directory.
-- All executable code is compiled locally from the public source in this repository.
-- Runtime audio capture, buffering, and playback use only Apple Core Audio APIs.
-- Normal installation requires no administrator password, privileged installer, system audio driver, or restart. A guided repair of an existing broken Command Line Tools installation requires administrator approval.
-- In-app updates use the same public source bootstrap as the original installation and keep a diagnostic log at `~/Library/Logs/Audio Delay Update.log`.
-- The locally built app is ad-hoc signed. Organization-managed Macs may still impose additional application-control policies.
+- Audio capture, buffering, and playback use Apple's Core Audio APIs.
+- Normal installation requires no administrator password or restart; only guided repair of an already-broken Apple toolchain requires administrator approval.
+- Update diagnostics are stored at `~/Library/Logs/Audio Delay Update.log`.
+- The locally built app is ad-hoc signed. Managed Macs may enforce additional organizational policies.
 
-The one-line bootstrap executes source obtained from this public repository. Security-conscious users should inspect `bootstrap.sh`, `install.sh`, and the scripts under `scripts/` before running it.
+The one-line installer executes source from this repository. Security-conscious users should inspect `bootstrap.sh`, `install.sh`, and `scripts/` before running it.
 
-## Native API reference
-
-The implementation follows Apple's Core Audio process-tap architecture:
+Technical references:
 
 - https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps
 - https://developer.apple.com/documentation/coreaudio/catapmutebehavior

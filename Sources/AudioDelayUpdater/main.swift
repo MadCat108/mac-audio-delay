@@ -61,6 +61,9 @@ private final class UpdaterWindowController: NSWindowController {
   private var toolchainFailureDetected = false
   private var toolchainRepairAvailable = false
   private var toolchainVersions: [String] = []
+  private var activityTimer: Timer?
+  private var stageStartedAt = Date()
+  private var stageDetail = ""
 
   private let logURL = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Logs/Audio Delay Update.log")
@@ -87,6 +90,7 @@ private final class UpdaterWindowController: NSWindowController {
 
   func start(scriptURL: URL) {
     updateStage(progress: 4, status: "Preparing update…", detail: "Starting the update helper")
+    startActivityTimer()
 
     let process = Process()
     let pipe = Pipe()
@@ -118,7 +122,28 @@ private final class UpdaterWindowController: NSWindowController {
     do {
       try process.run()
     } catch {
+      activityTimer?.invalidate()
+      activityTimer = nil
       fail("The updater could not be launched.", detail: error.localizedDescription)
+    }
+  }
+
+  private func startActivityTimer() {
+    activityTimer?.invalidate()
+    activityTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, self.process != nil, !self.failed else { return }
+        let elapsed = max(0, Int(Date().timeIntervalSince(self.stageStartedAt)))
+        guard elapsed >= 8 else { return }
+
+        let elapsedText: String
+        if elapsed < 60 {
+          elapsedText = "\(elapsed)s elapsed"
+        } else {
+          elapsedText = "\(elapsed / 60)m \(elapsed % 60)s elapsed"
+        }
+        self.detailLabel.stringValue = "\(self.stageDetail)\nStill working — \(elapsedText)"
+      }
     }
   }
 
@@ -264,22 +289,108 @@ private final class UpdaterWindowController: NSWindowController {
       )
     case lower.contains("audio delay update started"):
       updateStage(progress: 7, status: "Preparing update…", detail: "Connecting securely to GitHub")
+    case lower == "audio delay stage: downloading source":
+      updateStage(
+        progress: 12,
+        status: "Downloading latest source…",
+        detail: "Receiving the public source archive from GitHub"
+      )
     case lower.contains("downloading audio delay source"):
       updateStage(progress: 14, status: "Downloading latest source…", detail: line)
+    case lower == "audio delay stage: extracting source":
+      updateStage(
+        progress: 18,
+        status: "Extracting downloaded source…",
+        detail: "Unpacking the source archive"
+      )
+    case lower == "audio delay stage: source ready":
+      updateStage(
+        progress: 22,
+        status: "Source ready",
+        detail: "The downloaded source was extracted and validated"
+      )
     case lower.contains("downloaded audio delay version"):
-      updateStage(progress: 20, status: line, detail: "Verifying the downloaded source")
+      updateStage(progress: 23, status: line, detail: "Preparing installation on this Mac")
+    case lower == "audio delay stage: checking system":
+      updateStage(
+        progress: 25,
+        status: "Checking this Mac…",
+        detail: "Reading the macOS version and processor architecture"
+      )
+    case lower == "audio delay stage: closing running app":
+      updateStage(
+        progress: 27,
+        status: "Closing the previous version…",
+        detail: "Waiting for Audio Delay to stop cleanly"
+      )
+    case lower == "audio delay stage: checking build tools":
+      updateStage(
+        progress: 30,
+        status: "Checking Apple build tools…",
+        detail: "Verifying the Swift compiler and macOS SDK; this can take a moment"
+      )
     case lower.contains("command line tools"):
-      updateStage(progress: 22, status: "Checking Apple build tools…", detail: line)
+      updateStage(progress: 31, status: "Checking Apple build tools…", detail: line)
+    case lower == "audio delay stage: build tools ready":
+      updateStage(
+        progress: 35,
+        status: "Apple build tools ready",
+        detail: "The Swift compiler and macOS SDK passed verification"
+      )
+    case lower == "audio delay stage: starting local build":
+      updateStage(
+        progress: 38,
+        status: "Starting local build…",
+        detail: "Preparing the native audio engine and application"
+      )
     case lower.contains("building audio delay locally"):
-      updateStage(progress: 32, status: "Preparing the native audio engine…", detail: line)
+      updateStage(progress: 39, status: "Starting local build…", detail: line)
+    case lower == "audio delay stage: preparing build":
+      updateStage(
+        progress: 41,
+        status: "Preparing Swift build…",
+        detail: "Planning the release build"
+      )
+    case lower == "audio delay stage: compiling application":
+      updateStage(
+        progress: 45,
+        status: "Compiling Audio Delay…",
+        detail: "Building locally; the first build can take several minutes"
+      )
     case lower.contains("building for production"):
-      updateStage(progress: 62, status: "Building Audio Delay…", detail: "Compiling the latest application")
-    case lower.contains("build of product"):
-      updateStage(progress: 88, status: "Finishing the application…", detail: line)
+      updateStage(progress: 47, status: "Compiling Audio Delay…", detail: "Swift production build is running")
+    case lower.contains("compiling audiodelayupdater"):
+      updateStage(progress: 76, status: "Compiling update helper…", detail: line)
+    case lower.contains("linking audiodelayupdater"):
+      updateStage(progress: 82, status: "Linking update helper…", detail: line)
+    case lower.contains("compiling audiodelay"):
+      updateStage(progress: 56, status: "Compiling Audio Delay…", detail: line)
+    case lower.contains("linking audiodelay"):
+      updateStage(progress: 64, status: "Linking Audio Delay…", detail: line)
+    case lower == "audio delay stage: application compiled":
+      updateStage(progress: 68, status: "Audio Delay compiled", detail: "Main application build completed")
+    case lower == "audio delay stage: compiling updater":
+      updateStage(progress: 72, status: "Compiling update helper…", detail: "Building the in-app updater")
+    case lower.contains("build of product 'audiodelayupdater'"):
+      updateStage(progress: 84, status: "Update helper compiled", detail: line)
+    case lower == "audio delay stage: updater compiled":
+      updateStage(progress: 85, status: "Update helper compiled", detail: "Both executable components are ready")
+    case lower.contains("build of product 'audiodelay'"):
+      updateStage(progress: 68, status: "Audio Delay compiled", detail: line)
+    case lower == "audio delay stage: packaging application":
+      updateStage(progress: 87, status: "Packaging application…", detail: "Assembling the macOS app bundle and resources")
+    case lower == "audio delay stage: signing application":
+      updateStage(progress: 90, status: "Signing application…", detail: "Applying the local code signature")
+    case lower == "audio delay stage: verifying application":
+      updateStage(progress: 93, status: "Verifying application…", detail: "Checking bundle integrity and signature")
     case lower.hasPrefix("built:"):
-      updateStage(progress: 92, status: "Verifying the application…", detail: line)
+      updateStage(progress: 95, status: "Application ready", detail: line)
+    case lower == "audio delay stage: installing application":
+      updateStage(progress: 97, status: "Installing update…", detail: "Replacing the previous user installation")
     case lower.hasPrefix("installed:"):
-      updateStage(progress: 97, status: "Installing the update…", detail: line)
+      updateStage(progress: 99, status: "Update installed", detail: line)
+    case lower == "audio delay stage: installation complete":
+      updateStage(progress: 99, status: "Update installed", detail: "Finalizing the update")
     case lower.contains("update completed"):
       updateStage(progress: 100, status: "Update complete", detail: "Opening Audio Delay…")
     default:
@@ -289,12 +400,18 @@ private final class UpdaterWindowController: NSWindowController {
 
   private func updateStage(progress value: Double, status: String, detail: String) {
     guard !failed else { return }
+    if statusLabel.stringValue != status {
+      stageStartedAt = Date()
+    }
+    stageDetail = detail
     progress.animator().doubleValue = max(progress.doubleValue, value)
     statusLabel.stringValue = status
     detailLabel.stringValue = detail
   }
 
   private func finish(status: Int32) {
+    activityTimer?.invalidate()
+    activityTimer = nil
     outputPipe?.fileHandleForReading.readabilityHandler = nil
     outputPipe = nil
     process = nil

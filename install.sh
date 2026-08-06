@@ -14,6 +14,7 @@ stop_running_app() {
     return
   fi
 
+  echo "Audio Delay stage: Closing running app"
   echo "Closing the running Audio Delay app..."
   /usr/bin/osascript \
     -e 'tell application id "org.audiodelay.utility" to quit' \
@@ -32,6 +33,7 @@ stop_running_app() {
 machine_architecture="$(uname -m)"
 macos_version="$(sw_vers -productVersion)"
 macos_build="$(sw_vers -buildVersion)"
+echo "Audio Delay stage: Checking system"
 echo "System: macOS $macos_version (build $macos_build, $machine_architecture)"
 
 if [[ "$machine_architecture" != "arm64" ]]; then
@@ -49,6 +51,9 @@ if (( macos_major < MINIMUM_MACOS_MAJOR )) || \
 fi
 
 stop_running_app
+
+echo "Audio Delay stage: Checking build tools"
+echo "Checking Apple Command Line Tools and macOS SDK..."
 
 toolchain_commands_exist() {
   xcrun --find swift >/dev/null 2>&1 && \
@@ -158,10 +163,13 @@ else
 fi
 
 "$SCRIPT_DIR/scripts/check-toolchain.sh"
+echo "Audio Delay stage: Build tools ready"
 
+echo "Audio Delay stage: Starting local build"
 echo "Building Audio Delay locally on this Mac..."
 "$SCRIPT_DIR/scripts/build-app.sh"
 
+echo "Audio Delay stage: Installing application"
 mkdir -p "$INSTALL_DIR"
 if [[ -d "$APP_DEST" ]]; then
   backup="$HOME/.Trash/Audio Delay-$(date +%Y%m%d-%H%M%S).app"
@@ -170,6 +178,7 @@ if [[ -d "$APP_DEST" ]]; then
 fi
 ditto "$APP_SOURCE" "$APP_DEST"
 
+echo "Audio Delay stage: Installation complete"
 echo "Installed: $APP_DEST"
 if [[ "${AUDIO_DELAY_NO_OPEN:-0}" != "1" ]]; then
   open "$APP_DEST"

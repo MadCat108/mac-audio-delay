@@ -16,12 +16,14 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 SOURCE_ARCHIVE="$TMP_DIR/source.tar.gz"
 SOURCE_DIR="$TMP_DIR/source"
 
+echo "Audio Delay stage: Downloading source"
 echo "Downloading Audio Delay source from GitHub..."
 curl --fail --location --silent --show-error \
   --proto '=https' --tlsv1.2 \
   "https://github.com/$REPOSITORY/archive/refs/heads/main.tar.gz" \
   -o "$SOURCE_ARCHIVE"
 
+echo "Audio Delay stage: Extracting source"
 mkdir -p "$SOURCE_DIR"
 tar -xzf "$SOURCE_ARCHIVE" -C "$SOURCE_DIR" --strip-components=1
 
@@ -39,6 +41,7 @@ if [[ ! "$SOURCE_VERSION" =~ '^[0-9]+(\.[0-9]+)+$' ]]; then
   echo "The downloaded repository contains an invalid version number." >&2
   exit 1
 fi
+echo "Audio Delay stage: Source ready"
 echo "Downloaded Audio Delay version $SOURCE_VERSION."
 
 "$SOURCE_DIR/install.sh"
