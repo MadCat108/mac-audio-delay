@@ -31,7 +31,7 @@ struct AudioDelayApp: App {
     }
 
     Window("About Audio Delay", id: "about") {
-      AboutView(updateManager: updateManager)
+      AboutView(model: model, updateManager: updateManager)
     }
     .windowResizability(.contentSize)
     .defaultPosition(.center)

@@ -18,6 +18,7 @@ OSStatus ADDelayProcessorStart(
     AudioObjectID deviceID
 );
 void ADDelayProcessorStop(ADDelayProcessor *processor);
+void ADDelayProcessorSetOutputGain(ADDelayProcessor *processor, float gain);
 
 void ADDelayProcessorGetPeaks(
     const ADDelayProcessor *processor,

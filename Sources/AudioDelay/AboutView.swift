@@ -2,7 +2,9 @@ import AppKit
 import SwiftUI
 
 struct AboutView: View {
+  @ObservedObject var model: AudioDelayModel
   @ObservedObject var updateManager: UpdateManager
+  @State private var diagnosticsCopied = false
 
   private let projectURL = URL(string: "https://github.com/MadCat108/mac-audio-delay")!
   private let licenseURL = URL(
@@ -57,6 +59,17 @@ struct AboutView: View {
         .buttonStyle(.bordered)
       }
 
+      Button {
+        copyDiagnostics()
+      } label: {
+        Label(
+          diagnosticsCopied ? "Diagnostics Copied" : "Copy Diagnostics",
+          systemImage: diagnosticsCopied ? "checkmark" : "doc.on.doc"
+        )
+      }
+      .buttonStyle(.bordered)
+      .help("Copy privacy-safe technical details for support")
+
       ZStack {
         if let result = updateManager.inlineCheckResult {
           inlineUpdateResult(result)
@@ -78,6 +91,16 @@ struct AboutView: View {
     .padding(.vertical, 26)
     .frame(width: 410)
     .animation(.easeOut(duration: 0.2), value: updateManager.inlineCheckResult)
+  }
+
+  private func copyDiagnostics() {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(
+      model.diagnosticsReport(appVersion: updateManager.currentVersionText).text,
+      forType: .string
+    )
+    diagnosticsCopied = true
   }
 
   @ViewBuilder

@@ -27,6 +27,8 @@ struct ADDelayProcessor {
     std::atomic<float> rightInputPeak{0};
     std::atomic<float> leftPeak{0};
     std::atomic<float> rightPeak{0};
+    std::atomic<float> outputGain{1};
+    float currentOutputGain = 1;
 };
 
 static UInt32 frameCount(const AudioBuffer& buffer) noexcept {
@@ -135,6 +137,10 @@ static OSStatus delayIOProc(
     float rightInputPeak = 0;
     float leftPeak = 0;
     float rightPeak = 0;
+    const float targetOutputGain = processor->outputGain.load(std::memory_order_relaxed);
+    const float gainStep = frames > 0
+        ? (targetOutputGain - processor->currentOutputGain) / frames
+        : 0;
 
     for (UInt32 frame = 0; frame < frames; ++frame) {
         float inputLeft = 0;
@@ -153,6 +159,10 @@ static OSStatus delayIOProc(
             processor->position = (processor->position + 1) % processor->delayFrames;
         }
 
+        processor->currentOutputGain += gainStep;
+        outputLeft *= processor->currentOutputGain;
+        outputRight *= processor->currentOutputGain;
+
         writeStereoFrame(output, frame, outputLeft, outputRight);
         leftPeak = std::max(leftPeak, std::abs(outputLeft));
         rightPeak = std::max(rightPeak, std::abs(outputRight));
@@ -162,6 +172,7 @@ static OSStatus delayIOProc(
     processor->rightInputPeak.store(rightInputPeak, std::memory_order_relaxed);
     processor->leftPeak.store(leftPeak, std::memory_order_relaxed);
     processor->rightPeak.store(rightPeak, std::memory_order_relaxed);
+    processor->currentOutputGain = targetOutputGain;
     return noErr;
 }
 
@@ -199,6 +210,7 @@ OSStatus ADDelayProcessorStart(ADDelayProcessor *processor, AudioObjectID device
         return status;
     }
 
+    processor->currentOutputGain = processor->outputGain.load(std::memory_order_relaxed);
     status = AudioDeviceStart(deviceID, ioProcID);
     if (status != noErr) {
         AudioDeviceDestroyIOProcID(deviceID, ioProcID);
@@ -223,6 +235,14 @@ void ADDelayProcessorStop(ADDelayProcessor *processor) {
     processor->rightInputPeak.store(0, std::memory_order_relaxed);
     processor->leftPeak.store(0, std::memory_order_relaxed);
     processor->rightPeak.store(0, std::memory_order_relaxed);
+}
+
+void ADDelayProcessorSetOutputGain(ADDelayProcessor *processor, float gain) {
+    if (processor == nullptr) {
+        return;
+    }
+    const float clampedGain = std::max(0.0f, std::min(1.0f, gain));
+    processor->outputGain.store(clampedGain, std::memory_order_relaxed);
 }
 
 void ADDelayProcessorGetPeaks(

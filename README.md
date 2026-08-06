@@ -20,11 +20,18 @@ On first playback, choose **Allow** when macOS requests System Audio Recording p
 2. Enter a delay from 0 to 3,600 seconds.
 3. Choose **All Mac Audio** or one running application.
 4. Choose the playback device.
-5. Press **Start**.
+5. Optionally adjust Audio Delay's output volume or mute it.
+6. Press **Start**.
 
 All-audio mode captures every application except Audio Delay. Selected-app mode delays only that application while other Mac audio plays normally. If the selected app quits, Audio Delay waits and reconnects automatically when it reopens. If the selected playback device disconnects, Audio Delay stops safely, restores normal playback, selects the current macOS default output, and explains what happened. The app never changes the system's default output device.
 
-The delay, source, and output are remembered. If a saved application is no longer running, the app returns to **All Mac Audio**. If a saved output is unavailable, it uses the current macOS default output.
+The delay, source, output, and Audio Delay output volume are remembered. Mute is temporary and resets when the app restarts. These controls affect only Audio Delay—not the Mac's system volume. If a saved application is no longer running, the app returns to **All Mac Audio**. If a saved output is unavailable, it uses the current macOS default output.
+
+The stereo meters show the effective Audio Delay playback level, including its volume and mute controls. Like standard audio peak meters, they use a logarithmic decibel scale, so their bar length is not directly proportional to the volume percentage.
+
+The status area distinguishes buffering, playing, missing source audio, a closed selected application, a disconnected output, and a detected permission problem.
+
+For support, open **About Audio Delay** and choose **Copy Diagnostics**. The report includes useful versions, permission and connection state, audio selections, sample rate, volume, and the last error. It does not include personal paths or a list of running applications.
 
 Closing the window quits when audio is stopped. If delay or routing is active, Audio Delay asks for confirmation before stopping playback and restoring normal undelayed audio.
 

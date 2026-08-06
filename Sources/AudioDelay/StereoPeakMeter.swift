@@ -17,6 +17,7 @@ struct StereoPeakMeter: View {
       )
     }
     .frame(width: 172)
+    .help("Output peak level on a logarithmic decibel scale")
     .accessibilityElement(children: .contain)
   }
 }

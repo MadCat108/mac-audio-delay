@@ -12,17 +12,6 @@ final class AudioDelayModel: ObservableObject {
     case stopped
     case waiting(Int)
     case running
-
-    var label: String {
-      switch self {
-      case .stopped:
-        return "Stopped"
-      case .waiting(let seconds):
-        return "Buffering — \(seconds) seconds remaining"
-      case .running:
-        return "Playing"
-      }
-    }
   }
 
   @Published var delayText: String {
@@ -30,9 +19,23 @@ final class AudioDelayModel: ObservableObject {
       DelayPreferences.saveIfValid(delayText, to: preferences)
     }
   }
+  @Published var outputVolume: Double {
+    didSet {
+      OutputLevelPreferences.saveVolume(outputVolume, to: preferences)
+      applyOutputLevel()
+    }
+  }
+  @Published var isOutputMuted = false {
+    didSet {
+      applyOutputLevel()
+    }
+  }
   @Published var outputDevices: [AudioDevice] = []
   @Published var selectedOutputID: AudioDeviceID? {
     didSet {
+      if selectedOutputID != oldValue {
+        outputDisconnectionMessage = nil
+      }
       guard let selectedOutputID,
         let output = outputDevices.first(where: { $0.id == selectedOutputID })
       else {
@@ -59,6 +62,9 @@ final class AudioDelayModel: ObservableObject {
   @Published private(set) var inputPeakLevels = StereoPeak.zero
   @Published private(set) var noAudioDetected = false
   @Published private(set) var selectedSourceIsAvailable = true
+  @Published private(set) var captureAccessState = AudioCaptureAccessState.notChecked
+  @Published private(set) var outputDisconnectionMessage: String?
+  @Published private(set) var lastErrorMessage: String?
   @Published var errorMessage: String?
   @Published var needsAudioCapturePermission = false
 
@@ -78,10 +84,24 @@ final class AudioDelayModel: ObservableObject {
     guard isRunning, case .application = selectedSource else { return false }
     return !selectedSourceIsAvailable
   }
+  var displayStatus: AudioDelayStatus {
+    if captureAccessState == .permissionRequired { return .permissionRequired }
+    if outputDisconnectionMessage != nil { return .outputDisconnected }
+    if isWaitingForSelectedSource {
+      return .waitingForSource(selectedSourceApplicationName ?? "selected app")
+    }
+    if noAudioDetected { return .noAudioDetected }
+    switch runState {
+    case .stopped: return .stopped
+    case .waiting(let seconds): return .buffering(seconds)
+    case .running: return .playing
+    }
+  }
 
   init(preferences: UserDefaults = .standard) {
     self.preferences = preferences
     delayText = DelayPreferences.load(from: preferences)
+    outputVolume = OutputLevelPreferences.loadVolume(from: preferences)
     selectedSource = .allMacAudio
     refreshDevices()
     refreshApplications()
@@ -108,7 +128,7 @@ final class AudioDelayModel: ObservableObject {
         defaultID: defaultID
       )
     } catch {
-      errorMessage = error.localizedDescription
+      reportError(error.localizedDescription)
     }
   }
 
@@ -135,12 +155,13 @@ final class AudioDelayModel: ObservableObject {
   func start() {
     guard !isRunning else { return }
     needsAudioCapturePermission = false
+    outputDisconnectionMessage = nil
     guard let seconds = DelayValidation.parse(delayText) else {
-      errorMessage = "Enter a delay between 0 and 3600 seconds."
+      reportError("Enter a delay between 0 and 3600 seconds.")
       return
     }
     guard let output = outputDevices.first(where: { $0.id == selectedOutputID }) else {
-      errorMessage = "Select an output device."
+      reportError("Select an output device.")
       return
     }
 
@@ -161,6 +182,7 @@ final class AudioDelayModel: ObservableObject {
     selectedSourceIsAvailable = true
     sourceReconnectionMonitor.reset()
     outputAvailabilityTracker = nil
+    outputDisconnectionMessage = nil
     engine?.stop()
     engine = nil
     runState = .stopped
@@ -177,6 +199,7 @@ final class AudioDelayModel: ObservableObject {
         delay: seconds,
         output: output,
         source: selectedSource,
+        outputGain: effectiveOutputGain,
         sourceAvailabilityChanged: { [weak self] isAvailable in
           Task { @MainActor [weak self] in
             self?.setSelectedSourceAvailability(isAvailable)
@@ -184,12 +207,13 @@ final class AudioDelayModel: ObservableObject {
         }
       )
       self.engine = engine
+      captureAccessState = .available
       outputAvailabilityTracker = AudioOutputAvailabilityTracker(outputUID: output.uid)
       peakLevels = .zero
       inputPeakLevels = .zero
       noAudioDetected = false
       inputActivityMonitor = AudioInputActivityMonitor()
-      meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+      let meterTimer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
         Task { @MainActor in
           guard let self, let engine = self.engine else { return }
           self.peakLevels = engine.peakLevels()
@@ -207,6 +231,8 @@ final class AudioDelayModel: ObservableObject {
           self.noAudioDetected = self.selectedSourceIsAvailable && noInputDetected
         }
       }
+      self.meterTimer = meterTimer
+      RunLoop.main.add(meterTimer, forMode: .common)
       beginCountdown(seconds: seconds)
     } catch {
       engine?.stop()
@@ -214,9 +240,11 @@ final class AudioDelayModel: ObservableObject {
       if let nativeError = error as? NativeAudioDelayError,
         case .audioCapturePermissionDenied = nativeError
       {
+        captureAccessState = .permissionRequired
+        lastErrorMessage = nativeError.localizedDescription
         needsAudioCapturePermission = true
       } else {
-        errorMessage = error.localizedDescription
+        reportError(error.localizedDescription)
       }
       runState = .stopped
     }
@@ -247,7 +275,9 @@ final class AudioDelayModel: ObservableObject {
         stop()
         selectAvailableOutput(preferSavedOutput: false)
         let replacementName = selectedOutputName ?? "the current system output"
-        errorMessage = "\(disconnectedName) disconnected. Audio Delay stopped and normal playback was restored. \(replacementName) is now selected. Reconnect the device or press Start to use this output."
+        let message = "\(disconnectedName) disconnected. Audio Delay stopped and normal playback was restored. \(replacementName) is now selected. Reconnect the device or press Start to use this output."
+        outputDisconnectionMessage = message
+        reportError(message)
         return
       }
 
@@ -259,7 +289,7 @@ final class AudioDelayModel: ObservableObject {
       selectAvailableOutput(preferSavedOutput: true)
     } catch {
       if isRunning {
-        errorMessage = error.localizedDescription
+        reportError(error.localizedDescription)
       }
     }
   }
@@ -280,15 +310,64 @@ final class AudioDelayModel: ObservableObject {
     )
   }
 
+  func diagnosticsReport(appVersion: String) -> DiagnosticsReport {
+    let sourceName: String
+    switch selectedSource {
+    case .allMacAudio:
+      sourceName = "All Mac Audio"
+    case .application:
+      sourceName = selectedSourceApplicationName ?? "Selected application"
+    }
+    let outputName = selectedOutputName ?? "None"
+    let sampleRate: String
+    if let selectedOutputID,
+      let rate = try? AudioDevices.nominalSampleRate(of: selectedOutputID)
+    {
+      sampleRate = "\(Int(rate.rounded())) Hz"
+    } else {
+      sampleRate = "Unavailable"
+    }
+
+    return DiagnosticsReport(
+      appVersion: appVersion,
+      macOSVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+      permission: captureAccessState.rawValue,
+      status: displayStatus.label,
+      delay: "\(delayText) seconds",
+      source: sourceName,
+      output: outputName,
+      sampleRate: sampleRate,
+      outputVolume: isOutputMuted
+        ? "Muted (\(Int((outputVolume * 100).rounded()))%)"
+        : "\(Int((outputVolume * 100).rounded()))%",
+      lastError: lastErrorMessage
+    )
+  }
+
+  private func reportError(_ message: String) {
+    lastErrorMessage = message
+    errorMessage = message
+  }
+
+  var effectiveOutputGain: Double {
+    isOutputMuted ? 0 : outputVolume
+  }
+
+  private func applyOutputLevel() {
+    engine?.setOutputGain(effectiveOutputGain)
+  }
+
   private func beginCountdown(seconds: Double) {
     countdownTimer?.invalidate()
     countdownDuration = seconds
     bufferProgress = 0
     countdownDeadline = Date().addingTimeInterval(seconds)
     updateCountdown()
-    countdownTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+    let countdownTimer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
       Task { @MainActor in self?.updateCountdown() }
     }
+    self.countdownTimer = countdownTimer
+    RunLoop.main.add(countdownTimer, forMode: .common)
   }
 
   private func updateCountdown() {

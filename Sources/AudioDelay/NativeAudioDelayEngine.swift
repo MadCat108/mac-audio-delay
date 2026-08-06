@@ -68,6 +68,7 @@ final class NativeAudioDelayEngine {
     delay seconds: Double,
     output: AudioDevice,
     source: AudioSourceSelection,
+    outputGain: Double = 1,
     sourceAvailabilityChanged: ((Bool) -> Void)? = nil
   ) throws {
     stop()
@@ -119,6 +120,7 @@ final class NativeAudioDelayEngine {
         throw NativeAudioDelayError.allocationFailed(seconds)
       }
       processor = createdProcessor
+      ADDelayProcessorSetOutputGain(createdProcessor, Float(outputGain))
 
       try Self.check(
         ADDelayProcessorStart(createdProcessor, aggregateID),
@@ -177,6 +179,11 @@ final class NativeAudioDelayEngine {
       leftClipping: left >= 0.999,
       rightClipping: right >= 0.999
     )
+  }
+
+  func setOutputGain(_ gain: Double) {
+    guard let processor else { return }
+    ADDelayProcessorSetOutputGain(processor, Float(gain))
   }
 
   private static func meterLevel(_ amplitude: Float) -> Double {

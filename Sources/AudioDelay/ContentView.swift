@@ -76,6 +76,7 @@ struct ContentView: View {
             model.refreshApplications()
           } label: {
             Image(systemName: "arrow.clockwise")
+              .frame(width: 16, height: 16)
           }
           .help("Refresh running applications")
           .disabled(model.isRunning)
@@ -104,9 +105,38 @@ struct ContentView: View {
             model.refreshDevices()
           } label: {
             Image(systemName: "arrow.clockwise")
+              .frame(width: 16, height: 16)
           }
           .help("Refresh audio devices")
           .disabled(model.isRunning)
+        }
+
+        Divider()
+
+        HStack {
+          Text("Volume")
+            .foregroundStyle(.secondary)
+
+          Slider(value: $model.outputVolume, in: 0...1)
+            .accessibilityLabel("Audio Delay output volume")
+
+          Text("\(Int((model.outputVolume * 100).rounded()))%")
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 40, alignment: .trailing)
+
+          Button {
+            model.isOutputMuted.toggle()
+          } label: {
+            Image(
+              systemName: model.isOutputMuted
+                ? "speaker.slash.fill"
+                : "speaker.wave.2.fill"
+            )
+            .frame(width: 16, height: 16)
+          }
+          .help(model.isOutputMuted ? "Unmute Audio Delay" : "Mute Audio Delay")
+          .accessibilityLabel(model.isOutputMuted ? "Unmute output" : "Mute output")
         }
       }
       .padding()
@@ -243,41 +273,51 @@ struct ContentView: View {
   }
 
   private var meterPeak: StereoPeak {
-    isBuffering ? model.inputPeakLevels : model.peakLevels
+    if isBuffering {
+      return model.inputPeakLevels.applyingGain(model.effectiveOutputGain)
+    }
+    return model.peakLevels
   }
 
   private var statusSymbol: String {
-    if model.isWaitingForSelectedSource { return "arrow.clockwise.circle.fill" }
-    if model.noAudioDetected { return "exclamationmark.triangle.fill" }
-    switch model.runState {
+    switch model.displayStatus {
     case .stopped: return "checkmark.circle.fill"
-    case .waiting: return "hourglass"
-    case .running: return "play.fill"
+    case .buffering: return "hourglass"
+    case .playing: return "play.fill"
+    case .noAudioDetected: return "exclamationmark.triangle.fill"
+    case .waitingForSource: return "arrow.clockwise.circle.fill"
+    case .outputDisconnected: return "speaker.slash.fill"
+    case .permissionRequired: return "exclamationmark.shield.fill"
     }
   }
 
   private var statusLabel: String {
-    if model.isWaitingForSelectedSource {
-      let name = model.selectedSourceApplicationName ?? "selected app"
-      return "Waiting for \(name) to reopen"
-    }
-    return model.noAudioDetected ? "No Audio Detected" : model.runState.label
+    model.displayStatus.label
   }
 
   private var statusColor: Color {
-    if model.isWaitingForSelectedSource { return .orange }
-    if model.noAudioDetected { return .yellow }
-    switch model.runState {
+    switch model.displayStatus {
     case .stopped: return .secondary
-    case .waiting: return .blue
-    case .running: return .green
+    case .buffering: return .blue
+    case .playing: return .green
+    case .noAudioDetected: return .yellow
+    case .waitingForSource: return .orange
+    case .outputDisconnected: return .red
+    case .permissionRequired: return .orange
     }
   }
 
   private var footerText: String {
-    if model.isWaitingForSelectedSource {
-      let name = model.selectedSourceApplicationName ?? "The selected app"
+    switch model.displayStatus {
+    case .permissionRequired:
+      return "Allow System Audio Recording access, then press Start again."
+    case .outputDisconnected:
+      return model.outputDisconnectionMessage
+        ?? "The selected playback device disconnected. Choose an available output."
+    case .waitingForSource(let name):
       return "\(name) is not running. Audio Delay will reconnect automatically when it reopens."
+    default:
+      break
     }
     if isRoutingOnly {
       if let applicationName = model.selectedSourceApplicationName {

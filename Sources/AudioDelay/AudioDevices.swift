@@ -77,6 +77,21 @@ enum AudioDevices {
     return id
   }
 
+  static func nominalSampleRate(of id: AudioDeviceID) throws -> Double {
+    var address = AudioObjectPropertyAddress(
+      mSelector: kAudioDevicePropertyNominalSampleRate,
+      mScope: kAudioObjectPropertyScopeGlobal,
+      mElement: kAudioObjectPropertyElementMain
+    )
+    var rate = 0.0
+    var size = UInt32(MemoryLayout<Float64>.size)
+    let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &rate)
+    guard status == noErr else {
+      throw AudioDeviceError.coreAudio(status, "read the output sample rate")
+    }
+    return rate
+  }
+
   private static func stringProperty(_ id: AudioObjectID, selector: AudioObjectPropertySelector)
     -> String?
   {
