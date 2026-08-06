@@ -165,6 +165,7 @@ struct ContentView: View {
           Text(statusLabel)
             .fontWeight(.medium)
             .contentTransition(.numericText())
+            .lineLimit(1)
           Spacer()
           if model.isRunning {
             StereoPeakMeter(peak: meterPeak)
@@ -246,6 +247,7 @@ struct ContentView: View {
   }
 
   private var statusSymbol: String {
+    if model.isWaitingForSelectedSource { return "arrow.clockwise.circle.fill" }
     if model.noAudioDetected { return "exclamationmark.triangle.fill" }
     switch model.runState {
     case .stopped: return "checkmark.circle.fill"
@@ -255,10 +257,15 @@ struct ContentView: View {
   }
 
   private var statusLabel: String {
-    model.noAudioDetected ? "No Audio Detected" : model.runState.label
+    if model.isWaitingForSelectedSource {
+      let name = model.selectedSourceApplicationName ?? "selected app"
+      return "Waiting for \(name) to reopen"
+    }
+    return model.noAudioDetected ? "No Audio Detected" : model.runState.label
   }
 
   private var statusColor: Color {
+    if model.isWaitingForSelectedSource { return .orange }
     if model.noAudioDetected { return .yellow }
     switch model.runState {
     case .stopped: return .secondary
@@ -268,6 +275,10 @@ struct ContentView: View {
   }
 
   private var footerText: String {
+    if model.isWaitingForSelectedSource {
+      let name = model.selectedSourceApplicationName ?? "The selected app"
+      return "\(name) is not running. Audio Delay will reconnect automatically when it reopens."
+    }
     if isRoutingOnly {
       if let applicationName = model.selectedSourceApplicationName {
         return "\(applicationName) is routed directly to the selected output. Other Mac audio plays normally."

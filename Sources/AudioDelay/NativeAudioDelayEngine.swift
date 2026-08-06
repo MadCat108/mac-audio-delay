@@ -51,6 +51,8 @@ final class NativeAudioDelayEngine {
   private var processor: OpaquePointer?
   private var tapDescription: CATapDescription?
   private var selectedBundleIdentifier: String?
+  private var sourceAvailabilityTracker: AudioSourceAvailabilityTracker?
+  private var sourceAvailabilityChanged: ((Bool) -> Void)?
   private var processListAddress = AudioObjectPropertyAddress(
     mSelector: kAudioHardwarePropertyProcessObjectList,
     mScope: kAudioObjectPropertyScopeGlobal,
@@ -62,7 +64,12 @@ final class NativeAudioDelayEngine {
     stop()
   }
 
-  func start(delay seconds: Double, output: AudioDevice, source: AudioSourceSelection) throws {
+  func start(
+    delay seconds: Double,
+    output: AudioDevice,
+    source: AudioSourceSelection,
+    sourceAvailabilityChanged: ((Bool) -> Void)? = nil
+  ) throws {
     stop()
 
     do {
@@ -79,8 +86,13 @@ final class NativeAudioDelayEngine {
         tapDescription.isExclusive = true
       case .application(let bundleIdentifier):
         selectedBundleIdentifier = bundleIdentifier
-        tapDescription.processes = try Self.processObjectIDs(matching: bundleIdentifier)
+        let processIDs = try Self.processObjectIDs(matching: bundleIdentifier)
+        tapDescription.processes = processIDs
         tapDescription.isExclusive = false
+        sourceAvailabilityTracker = AudioSourceAvailabilityTracker(
+          isAvailable: !processIDs.isEmpty
+        )
+        self.sourceAvailabilityChanged = sourceAvailabilityChanged
       }
       self.tapDescription = tapDescription
 
@@ -112,6 +124,9 @@ final class NativeAudioDelayEngine {
         ADDelayProcessorStart(createdProcessor, aggregateID),
         "start system-audio capture"
       )
+      if let sourceAvailabilityTracker {
+        sourceAvailabilityChanged?(sourceAvailabilityTracker.isAvailable)
+      }
     } catch {
       stop()
       throw error
@@ -134,6 +149,8 @@ final class NativeAudioDelayEngine {
     }
     tapDescription = nil
     selectedBundleIdentifier = nil
+    sourceAvailabilityTracker = nil
+    sourceAvailabilityChanged = nil
   }
 
   func peakLevels() -> StereoPeak {
@@ -225,22 +242,29 @@ final class NativeAudioDelayEngine {
     guard tapID != kAudioObjectUnknown,
       let selectedBundleIdentifier,
       let tapDescription,
-      let processIDs = try? Self.processObjectIDs(matching: selectedBundleIdentifier),
-      Set(processIDs) != Set(tapDescription.processes)
+      let processIDs = try? Self.processObjectIDs(matching: selectedBundleIdentifier)
     else {
       return
     }
 
-    tapDescription.processes = processIDs
-    var mutableDescription = tapDescription
-    var address = AudioObjectPropertyAddress(
-      mSelector: kAudioTapPropertyDescription,
-      mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    let size = UInt32(MemoryLayout<CATapDescription>.stride)
-    _ = withUnsafeMutablePointer(to: &mutableDescription) { pointer in
-      AudioObjectSetPropertyData(tapID, &address, 0, nil, size, pointer)
+    if Set(processIDs) != Set(tapDescription.processes) {
+      tapDescription.processes = processIDs
+      var mutableDescription = tapDescription
+      var address = AudioObjectPropertyAddress(
+        mSelector: kAudioTapPropertyDescription,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+      )
+      let size = UInt32(MemoryLayout<CATapDescription>.stride)
+      _ = withUnsafeMutablePointer(to: &mutableDescription) { pointer in
+        AudioObjectSetPropertyData(tapID, &address, 0, nil, size, pointer)
+      }
+    }
+
+    if let availability = sourceAvailabilityTracker?.update(
+      isAvailable: !processIDs.isEmpty
+    ) {
+      sourceAvailabilityChanged?(availability)
     }
   }
 

@@ -18,7 +18,7 @@ final class AudioDelayModel: ObservableObject {
       case .stopped:
         return "Stopped"
       case .waiting(let seconds):
-        return "Audio begins in \(seconds) seconds"
+        return "Buffering — \(seconds) seconds remaining"
       case .running:
         return "Playing"
       }
@@ -58,6 +58,7 @@ final class AudioDelayModel: ObservableObject {
   @Published private(set) var peakLevels = StereoPeak.zero
   @Published private(set) var inputPeakLevels = StereoPeak.zero
   @Published private(set) var noAudioDetected = false
+  @Published private(set) var selectedSourceIsAvailable = true
   @Published var errorMessage: String?
   @Published var needsAudioCapturePermission = false
 
@@ -68,8 +69,15 @@ final class AudioDelayModel: ObservableObject {
   private var countdownDeadline: Date?
   private var countdownDuration = 0.0
   private var inputActivityMonitor = AudioInputActivityMonitor()
+  private var sourceReconnectionMonitor = AudioSourceReconnectionMonitor()
+  private var audioDeviceChangeMonitor: AudioDeviceChangeMonitor?
+  private var outputAvailabilityTracker: AudioOutputAvailabilityTracker?
 
   var isRunning: Bool { engine != nil }
+  var isWaitingForSelectedSource: Bool {
+    guard isRunning, case .application = selectedSource else { return false }
+    return !selectedSourceIsAvailable
+  }
 
   init(preferences: UserDefaults = .standard) {
     self.preferences = preferences
@@ -77,6 +85,11 @@ final class AudioDelayModel: ObservableObject {
     selectedSource = .allMacAudio
     refreshDevices()
     refreshApplications()
+    audioDeviceChangeMonitor = try? AudioDeviceChangeMonitor { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.audioDevicesChanged()
+      }
+    }
   }
 
   func refreshDevices() {
@@ -145,6 +158,9 @@ final class AudioDelayModel: ObservableObject {
     peakLevels = .zero
     inputPeakLevels = .zero
     noAudioDetected = false
+    selectedSourceIsAvailable = true
+    sourceReconnectionMonitor.reset()
+    outputAvailabilityTracker = nil
     engine?.stop()
     engine = nil
     runState = .stopped
@@ -156,8 +172,19 @@ final class AudioDelayModel: ObservableObject {
         throw NativeAudioDelayError.unsupportedSystem
       }
       let engine = NativeAudioDelayEngine()
-      try engine.start(delay: seconds, output: output, source: selectedSource)
+      selectedSourceIsAvailable = true
+      try engine.start(
+        delay: seconds,
+        output: output,
+        source: selectedSource,
+        sourceAvailabilityChanged: { [weak self] isAvailable in
+          Task { @MainActor [weak self] in
+            self?.setSelectedSourceAvailability(isAvailable)
+          }
+        }
+      )
       self.engine = engine
+      outputAvailabilityTracker = AudioOutputAvailabilityTracker(outputUID: output.uid)
       peakLevels = .zero
       inputPeakLevels = .zero
       noAudioDetected = false
@@ -167,9 +194,17 @@ final class AudioDelayModel: ObservableObject {
           guard let self, let engine = self.engine else { return }
           self.peakLevels = engine.peakLevels()
           self.inputPeakLevels = engine.inputPeakLevels()
-          self.noAudioDetected = self.inputActivityMonitor.update(
+          let hasInputActivity = self.inputPeakLevels.left > 0
+            || self.inputPeakLevels.right > 0
+          if self.sourceReconnectionMonitor.receiveInputActivity(
+            isActive: hasInputActivity
+          ), let seconds = DelayValidation.parse(self.delayText) {
+            self.beginCountdown(seconds: seconds)
+          }
+          let noInputDetected = self.inputActivityMonitor.update(
             peak: self.inputPeakLevels
           )
+          self.noAudioDetected = self.selectedSourceIsAvailable && noInputDetected
         }
       }
       beginCountdown(seconds: seconds)
@@ -187,7 +222,66 @@ final class AudioDelayModel: ObservableObject {
     }
   }
 
+  private func setSelectedSourceAvailability(_ isAvailable: Bool) {
+    guard selectedSourceIsAvailable != isAvailable else { return }
+    selectedSourceIsAvailable = isAvailable
+    sourceReconnectionMonitor.sourceAvailabilityChanged(isAvailable: isAvailable)
+    noAudioDetected = false
+    if isAvailable {
+      inputActivityMonitor = AudioInputActivityMonitor()
+    }
+  }
+
+  private func audioDevicesChanged() {
+    do {
+      let devices = try AudioDevices.all().filter(\.hasOutput)
+      let previouslySelectedOutputName = selectedOutputName
+      let disconnectedOutput = outputAvailabilityTracker?.update(
+        availableUIDs: Set(devices.map(\.uid))
+      ) == false
+
+      outputDevices = devices
+
+      if disconnectedOutput {
+        let disconnectedName = previouslySelectedOutputName ?? "The selected playback device"
+        stop()
+        selectAvailableOutput(preferSavedOutput: false)
+        let replacementName = selectedOutputName ?? "the current system output"
+        errorMessage = "\(disconnectedName) disconnected. Audio Delay stopped and normal playback was restored. \(replacementName) is now selected. Reconnect the device or press Start to use this output."
+        return
+      }
+
+      if let selectedOutputID,
+        devices.contains(where: { $0.id == selectedOutputID })
+      {
+        return
+      }
+      selectAvailableOutput(preferSavedOutput: true)
+    } catch {
+      if isRunning {
+        errorMessage = error.localizedDescription
+      }
+    }
+  }
+
+  private var selectedOutputName: String? {
+    guard let selectedOutputID else { return nil }
+    return outputDevices.first(where: { $0.id == selectedOutputID })?.name
+  }
+
+  private func selectAvailableOutput(preferSavedOutput: Bool) {
+    let defaultID = try? AudioDevices.defaultOutputID()
+    selectedOutputID = AudioSelectionResolver.outputID(
+      savedUID: preferSavedOutput
+        ? AudioSelectionPreferences.outputUID(from: preferences)
+        : nil,
+      devices: outputDevices,
+      defaultID: defaultID
+    )
+  }
+
   private func beginCountdown(seconds: Double) {
+    countdownTimer?.invalidate()
     countdownDuration = seconds
     bufferProgress = 0
     countdownDeadline = Date().addingTimeInterval(seconds)

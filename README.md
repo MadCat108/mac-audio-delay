@@ -22,7 +22,7 @@ On first playback, choose **Allow** when macOS requests System Audio Recording p
 4. Choose the playback device.
 5. Press **Start**.
 
-All-audio mode captures every application except Audio Delay. Selected-app mode delays only that application while other Mac audio plays normally. The app never changes the system's default output device.
+All-audio mode captures every application except Audio Delay. Selected-app mode delays only that application while other Mac audio plays normally. If the selected app quits, Audio Delay waits and reconnects automatically when it reopens. If the selected playback device disconnects, Audio Delay stops safely, restores normal playback, selects the current macOS default output, and explains what happened. The app never changes the system's default output device.
 
 The delay, source, and output are remembered. If a saved application is no longer running, the app returns to **All Mac Audio**. If a saved output is unavailable, it uses the current macOS default output.
 
