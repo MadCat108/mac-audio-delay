@@ -10,6 +10,11 @@ struct AudioDelayApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView(model: model)
+        .background {
+          MainWindowAccessor { window in
+            appDelegate.configureMainWindow(window, model: model)
+          }
+        }
         .task {
           updateManager.checkForUpdates(interactive: false)
         }
@@ -53,7 +58,87 @@ private struct AudioDelayCommands: Commands {
   }
 }
 
+private struct MainWindowAccessor: NSViewRepresentable {
+  let configure: (NSWindow) -> Void
+
+  func makeNSView(context: Context) -> WindowAccessView {
+    WindowAccessView(configure: configure)
+  }
+
+  func updateNSView(_ nsView: WindowAccessView, context: Context) {
+    nsView.configure = configure
+    nsView.configureWindowIfAvailable()
+  }
+
+  final class WindowAccessView: NSView {
+    var configure: (NSWindow) -> Void
+
+    init(configure: @escaping (NSWindow) -> Void) {
+      self.configure = configure
+      super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+      fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      configureWindowIfAvailable()
+    }
+
+    func configureWindowIfAvailable() {
+      guard let window else { return }
+      configure(window)
+    }
+  }
+}
+
 final class AudioDelayAppDelegate: NSObject, NSApplicationDelegate {
+  private weak var model: AudioDelayModel?
+  private weak var mainWindow: NSWindow?
+
+  func configureMainWindow(_ window: NSWindow, model: AudioDelayModel) {
+    self.model = model
+    mainWindow = window
+
+    guard let closeButton = window.standardWindowButton(.closeButton) else {
+      return
+    }
+    closeButton.target = self
+    closeButton.action = #selector(closeMainWindow)
+  }
+
+  @MainActor
+  @objc private func closeMainWindow() {
+    guard let model else {
+      NSApp.terminate(nil)
+      return
+    }
+
+    if model.isRunning {
+      let alert = NSAlert()
+      alert.alertStyle = .warning
+      alert.icon = NSApp.applicationIconImage
+      alert.messageText = "Quit Audio Delay?"
+      alert.informativeText =
+        "Audio delay is active. Quitting will stop delayed playback and return "
+        + "the source audio to its normal, undelayed system output."
+      alert.addButton(withTitle: "Quit")
+      alert.addButton(withTitle: "Cancel")
+
+      if alert.runModal() != .alertFirstButtonReturn {
+        mainWindow?.makeKeyAndOrderFront(nil)
+        return
+      }
+
+      model.stop()
+    }
+
+    NSApp.terminate(nil)
+  }
+
   func applicationShouldHandleReopen(
     _ sender: NSApplication,
     hasVisibleWindows flag: Bool

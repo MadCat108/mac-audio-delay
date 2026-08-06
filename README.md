@@ -1,6 +1,6 @@
 # Audio Delay for macOS
 
-A native macOS app that plays system audio through speakers or headphones after a configurable fixed delay. 
+A native macOS app that plays system audio through speakers or headphones after a configurable fixed delay.
 
 The signal path is entirely native:
 
@@ -28,10 +28,14 @@ The bootstrap script:
 1. Downloads this repository's source over HTTPS.
 2. Requests Apple's Command Line Tools through the normal macOS installer if they are missing.
 3. Verifies that Apple's compiler and macOS SDK are a matching installation.
-4. Builds the Swift app and native Core Audio engine locally.
-5. Ad-hoc signs the locally built app and installs it into `~/Applications`.
+4. Offers a guided repair in Terminal if the standalone Command Line Tools are broken.
+5. Builds the Swift app and native Core Audio engine locally.
+6. Ad-hoc signs the locally built app and installs it into `~/Applications`.
 
-The recipient does not need Xcode, Homebrew, an Apple Developer account, an audio driver, or administrator access. Apple's smaller Command Line Tools package is sufficient.
+The recipient does not need Xcode, Homebrew, an Apple Developer account, or an
+audio driver. Apple's smaller Command Line Tools package is sufficient. A
+normal installation does not require administrator access; repairing an
+existing broken Command Line Tools installation does.
 
 On first playback, macOS displays its normal system-audio recording permission popup. Choose **Allow**. macOS remembers the choice. If access is denied, it must be re-enabled manually under **System Settings → Privacy & Security → Screen & System Audio Recording**.
 
@@ -86,22 +90,32 @@ For a short live test, choose a five-second delay in the app. Start with disposa
 
 ## Apple Command Line Tools repair
 
-Audio Delay checks that Apple's Swift compiler can load Foundation
-from the installed macOS SDK before beginning the full build. If the check says
-the tools contain mixed versions, first install every available update in
-**System Settings → General → Software Update**, restart the Mac, and run the
-installer again. The mismatch affects only the developer tools under
-`/Library/Developer/CommandLineTools`; it does not mean macOS itself is damaged.
-The installer and foreground updater show the detected Swift compiler, macOS
-SDK, and Swift Package Manager versions so it is clear why the build cannot
-proceed. The complete compiler diagnostic is also retained in the update log.
+Audio Delay checks that Apple's Swift compiler can load Foundation from the
+installed macOS SDK before beginning the full build. If the standalone tools
+are incomplete or contain mixed versions, the Terminal installer explains the
+repair and asks permission before running:
+
+```bash
+sudo rm -rf /Library/Developer/CommandLineTools
+xcode-select --install
+```
+
+The administrator password is requested directly by `sudo`; Audio Delay does
+not read or store it. After Apple’s installer finishes, Audio Delay verifies the
+new tools and continues the installation automatically. A restart is not
+normally required. The repair removes only Apple's developer tools under
+`/Library/Developer/CommandLineTools`; it does not remove user files or indicate
+that macOS itself is damaged. The installer and foreground updater show the
+macOS version and build, machine architecture, Swift compiler, macOS SDK, and
+Swift Package Manager versions so it is clear why the build cannot proceed.
+The complete compiler diagnostic is also retained in the update log.
 
 ## Security model
 
 - The app installs only in the current user's `~/Applications` directory.
 - All executable code is compiled locally from the public source in this repository.
 - Runtime audio capture, buffering, and playback use only Apple Core Audio APIs.
-- No administrator password, privileged installer, system audio driver, or restart is required.
+- Normal installation requires no administrator password, privileged installer, system audio driver, or restart. A guided repair of an existing broken Command Line Tools installation requires administrator approval.
 - In-app updates use the same public source bootstrap as the original installation and keep a diagnostic log at `~/Library/Logs/Audio Delay Update.log`.
 - The locally built app is ad-hoc signed. Organization-managed Macs may still impose additional application-control policies.
 

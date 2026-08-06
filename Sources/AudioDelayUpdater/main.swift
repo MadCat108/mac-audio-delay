@@ -59,6 +59,7 @@ private final class UpdaterWindowController: NSWindowController {
   private var pendingOutput = ""
   private var failed = false
   private var toolchainFailureDetected = false
+  private var toolchainRepairAvailable = false
   private var toolchainVersions: [String] = []
 
   private let logURL = FileManager.default.homeDirectoryForCurrentUser
@@ -172,7 +173,7 @@ private final class UpdaterWindowController: NSWindowController {
     statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
     detailLabel.font = .systemFont(ofSize: 12)
     detailLabel.textColor = .secondaryLabelColor
-    detailLabel.maximumNumberOfLines = 7
+    detailLabel.maximumNumberOfLines = 10
 
     showLogButton.target = self
     showLogButton.action = #selector(showLog)
@@ -247,8 +248,11 @@ private final class UpdaterWindowController: NSWindowController {
         status: "Audio Delay build cannot proceed",
         detail: "Apple’s installed build tools do not match."
       )
+    case toolchainFailureDetected && lower == "guided repair: available":
+      toolchainRepairAvailable = true
     case toolchainFailureDetected && (
-      lower.hasPrefix("swift compiler:") ||
+      lower.hasPrefix("macos:") ||
+        lower.hasPrefix("swift compiler:") ||
         lower.hasPrefix("macos sdk:") ||
         lower.hasPrefix("swift package manager:")
     ):
@@ -322,17 +326,28 @@ private final class UpdaterWindowController: NSWindowController {
   }
 
   private func presentToolchainFailure() {
-    window?.setContentSize(NSSize(width: 660, height: 380))
+    window?.setContentSize(NSSize(width: 660, height: 420))
     window?.center()
 
     let versionText = toolchainVersions.isEmpty
       ? "Tool versions are available in the diagnostic log."
       : toolchainVersions.joined(separator: "\n")
-    let detail = """
-      Apple’s Swift compiler, macOS SDK, and package manager are not a matching installation.
-      \(versionText)
-      Install every available update in System Settings, restart the Mac, then try again.
-      """
+    let detail: String
+    if toolchainRepairAvailable {
+      detail = """
+        Apple’s installed Command Line Tools are incomplete or contain mixed files.
+        \(versionText)
+        The guided Terminal repair removes only /Library/Developer/CommandLineTools,
+        opens Apple’s installer, then continues the Audio Delay installation.
+        """
+      terminalRetryButton.title = "Repair in Terminal…"
+    } else {
+      detail = """
+        Apple’s Swift compiler could not use the installed macOS SDK.
+        \(versionText)
+        This failure was not recognized as safe for automatic repair. Use Retry in Terminal to view the complete diagnostic.
+        """
+    }
 
     fail("Audio Delay build cannot proceed", detail: detail)
   }
@@ -355,9 +370,15 @@ private final class UpdaterWindowController: NSWindowController {
 
   @objc private func retryInTerminal() {
     let alert = NSAlert()
-    alert.messageText = "Retry the update in Terminal?"
-    alert.informativeText =
-      "Terminal will download the official public source, rebuild Audio Delay locally, and show the complete installation output."
+    if toolchainRepairAvailable {
+      alert.messageText = "Repair Apple Command Line Tools in Terminal?"
+      alert.informativeText =
+        "Terminal will explain the repair, request confirmation, and let macOS request the administrator password directly. Audio Delay will continue installing after Apple’s installer finishes."
+    } else {
+      alert.messageText = "Retry the update in Terminal?"
+      alert.informativeText =
+        "Terminal will download the official public source, rebuild Audio Delay locally, and show the complete installation output."
+    }
     alert.alertStyle = .informational
     alert.addButton(withTitle: "Open Terminal")
     alert.addButton(withTitle: "Cancel")
@@ -366,11 +387,14 @@ private final class UpdaterWindowController: NSWindowController {
     do {
       let commandURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("Audio-Delay-Manual-Update-\(UUID().uuidString).command")
+      let startingMessage = toolchainRepairAvailable
+        ? "Starting the guided Apple tools repair and Audio Delay update..."
+        : "Starting the Audio Delay manual update..."
       let command = """
         #!/bin/zsh
         set -o pipefail
 
-        echo "Starting the Audio Delay manual update..."
+        echo "\(startingMessage)"
         curl -fsSL https://raw.githubusercontent.com/MadCat108/mac-audio-delay/main/bootstrap.sh | zsh
         update_exit=$?
 
@@ -398,7 +422,9 @@ private final class UpdaterWindowController: NSWindowController {
           userInfo: [NSLocalizedDescriptionKey: "macOS could not open the Terminal command."]
         )
       }
-      detailLabel.stringValue = "The manual installer is now running in Terminal."
+      detailLabel.stringValue = toolchainRepairAvailable
+        ? "The guided repair is now running in Terminal."
+        : "The manual installer is now running in Terminal."
     } catch {
       detailLabel.stringValue = "Could not open Terminal: \(error.localizedDescription)"
       NSApp.requestUserAttention(.criticalRequest)

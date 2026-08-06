@@ -25,6 +25,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Audio Delay update started at $(date)"
+echo "System: macOS $(sw_vers -productVersion) (build $(sw_vers -buildVersion), $(uname -m))"
 if [[ "${AUDIO_DELAY_UPDATE_FOREGROUND:-0}" != "1" ]]; then
   /usr/bin/osascript \
     -e 'display notification "The app will reopen when the update is complete." with title "Updating Audio Delay"' \
