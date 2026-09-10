@@ -1,4 +1,4 @@
-# A native macOS app that plays audio after a configurable fixed delay.
+# A native macOS app that plays audio after a configurable delay.
 
 <img width="558" height="643" alt="image" src="https://github.com/user-attachments/assets/c1ef2f02-9ffa-45fe-b762-7f335836ed8e" />
 
